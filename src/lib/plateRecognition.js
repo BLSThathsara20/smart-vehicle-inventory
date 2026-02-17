@@ -58,33 +58,64 @@ function preprocessForOCR(blob) {
 }
 
 export function extractPlateOrStockId(text) {
-  if (!text || typeof text !== 'string') return null
+  const all = extractAllPlateOrStockIds(text)
+  return all.length ? all[0] : null
+}
+
+/**
+ * Extract ALL plate/stock ID candidates from OCR text (for multi-search)
+ */
+export function extractAllPlateOrStockIds(text) {
+  if (!text || typeof text !== 'string') return []
   const t = text.toUpperCase().trim()
+  const seen = new Set()
+  const results = []
+
   const plateMatch = t.match(UK_PLATE_REGEX)
   if (plateMatch?.length) {
-    const normalized = plateMatch
+    plateMatch
       .map((m) => m.replace(/\s/g, ''))
       .filter((p) => p.length >= 5 && p.length <= 12)
-    if (normalized.length) return normalized[0]
+      .forEach((p) => {
+        if (!seen.has(p)) {
+          seen.add(p)
+          results.push(p)
+        }
+      })
   }
+
   const stockMatch = t.match(STOCK_ID_REGEX)
   if (stockMatch?.length) {
-    const best = stockMatch
+    stockMatch
       .map((m) => m.replace(/\s/g, ''))
       .filter((p) => p.length >= 3 && p.length <= 15)
-      .sort((a, b) => b.length - a.length)[0]
-    return best || null
+      .sort((a, b) => b.length - a.length)
+      .forEach((p) => {
+        if (!seen.has(p)) {
+          seen.add(p)
+          results.push(p)
+        }
+      })
   }
-  return null
+
+  return results
 }
 
 /**
  * OCR for plate/stock ID - preprocessed image, SPARSE_TEXT for full-frame photos
  */
 export async function recognizePlateFromImage(imageFile) {
+  const all = await recognizeAllFromImage(imageFile)
+  return all.length ? all[0] : null
+}
+
+/**
+ * OCR - returns ALL detected plate/stock ID candidates for multi-search
+ */
+export async function recognizeAllFromImage(imageFile) {
   const blob = imageFile instanceof Blob ? imageFile : await imageFile
   const preprocessed = await preprocessForOCR(blob)
   const worker = await getWorker()
   const { data } = await worker.recognize(preprocessed)
-  return extractPlateOrStockId(data?.text)
+  return extractAllPlateOrStockIds(data?.text)
 }

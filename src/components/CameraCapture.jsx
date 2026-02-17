@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Camera, Loader2 } from 'lucide-react'
-import { recognizePlateFromImage } from '../lib/plateRecognition'
+import { X, Camera, Loader2, Check, XCircle } from 'lucide-react'
+import { recognizeAllFromImage } from '../lib/plateRecognition'
 
-export function CameraCapture({ onCapture, onClose }) {
+export function CameraCapture({ onCapture, onClose, searchFn }) {
   const [stream, setStream] = useState(null)
-  const [scanning, setScanning] = useState(false)
+  const [phase, setPhase] = useState('idle') // idle | reading | searching
+  const [candidates, setCandidates] = useState([])
+  const [searchStatus, setSearchStatus] = useState([]) // { query, status: 'searching'|'found'|'not_found', vehicles? }
   const [error, setError] = useState(null)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
@@ -44,24 +46,68 @@ export function CameraCapture({ onCapture, onClose }) {
   }
 
   const handleCapture = async () => {
-    if (scanning) return
+    if (phase !== 'idle') return
     const blob = await captureFrame()
     if (!blob) return
-    setScanning(true)
+
+    setPhase('reading')
+    setCandidates([])
+    setSearchStatus([])
+
     try {
       const file = new File([blob], 'scan.jpg', { type: 'image/jpeg' })
-      const result = await recognizePlateFromImage(file)
-      onCaptureRef.current({ plate: result })
+      const all = await recognizeAllFromImage(file)
+
+      if (!all || all.length === 0) {
+        onCaptureRef.current({ plate: null, candidates: [] })
+        setPhase('idle')
+        return
+      }
+
+      setCandidates(all)
+      setPhase('searching')
+
+      if (!searchFn) {
+        onCaptureRef.current({ plate: all[0], candidates: all })
+        setPhase('idle')
+        return
+      }
+
+      for (let i = 0; i < all.length; i++) {
+        const q = all[i]
+        setSearchStatus((prev) => [
+          ...prev.slice(0, i),
+          { query: q, status: 'searching' },
+          ...prev.slice(i + 1),
+        ])
+
+        const { vehicles } = await searchFn(q)
+
+        if (vehicles && vehicles.length > 0) {
+          setSearchStatus((prev) =>
+            prev.map((s, j) => (j === i ? { ...s, status: 'found', vehicles } : s))
+          )
+          onCaptureRef.current({ plate: q, vehicles, candidates: all })
+          setPhase('idle')
+          return
+        }
+
+        setSearchStatus((prev) =>
+          prev.map((s, j) => (j === i ? { ...s, status: 'not_found' } : s))
+        )
+      }
+
+      onCaptureRef.current({ plate: null, candidates: all })
     } catch {
-      onCaptureRef.current({ plate: null })
+      onCaptureRef.current({ plate: null, candidates: [] })
     } finally {
-      setScanning(false)
+      setPhase('idle')
     }
   }
 
   const lastTapRef = useRef(0)
   const handleDoubleTap = (e) => {
-    if (scanning || !stream) return
+    if (phase !== 'idle' || !stream) return
     const now = Date.now()
     if (now - lastTapRef.current < 400) {
       lastTapRef.current = 0
@@ -70,6 +116,8 @@ export function CameraCapture({ onCapture, onClose }) {
       lastTapRef.current = now
     }
   }
+
+  const scanning = phase === 'reading' || phase === 'searching'
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col h-screen overflow-hidden">
@@ -106,11 +154,44 @@ export function CameraCapture({ onCapture, onClose }) {
         )}
         <canvas ref={canvasRef} className="hidden" />
         {scanning && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
-            <div className="flex flex-col items-center gap-3 px-6 py-4 rounded-xl bg-black/80">
-              <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-              <span className="text-white text-sm">Reading text...</span>
-            </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 z-10 p-4">
+            {phase === 'reading' && (
+              <div className="flex flex-col items-center gap-3 px-6 py-4 rounded-xl bg-black/80">
+                <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+                <span className="text-white text-sm">Reading text...</span>
+              </div>
+            )}
+            {phase === 'searching' && (
+              <div className="w-full max-w-sm space-y-2 rounded-xl bg-black/80 p-4">
+                <p className="text-slate-300 text-sm font-medium mb-2">
+                  Detected: {candidates.join(', ')}
+                </p>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  {searchStatus.map((s, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      {s.status === 'searching' && (
+                        <Loader2 className="w-4 h-4 text-orange-500 animate-spin shrink-0" />
+                      )}
+                      {s.status === 'found' && (
+                        <Check className="w-4 h-4 text-green-500 shrink-0" />
+                      )}
+                      {s.status === 'not_found' && (
+                        <XCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                      )}
+                      <span className="text-white font-mono">{s.query}</span>
+                      <span className="text-slate-400">
+                        {s.status === 'searching' && 'Searching...'}
+                        {s.status === 'found' && `✓ ${s.vehicles?.length || 0} found`}
+                        {s.status === 'not_found' && 'Not found'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

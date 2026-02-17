@@ -134,10 +134,38 @@ export function Search() {
     }
   }
 
-  const handleCameraCapture = ({ plate }) => {
+  const searchFn = async (q) => {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select(`*, vehicle_images (id, storage_path, sort_order)`)
+      .or(`plate_no.ilike.%${q}%,stock_id.ilike.%${q}%`)
+      .limit(5)
+    if (error) return { vehicles: [] }
+    const withUrls = (data || []).map((v) => {
+      const images = (v.vehicle_images || []).map((img) => ({
+        ...img,
+        url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
+      }))
+      return { ...v, images }
+    })
+    return { vehicles: withUrls }
+  }
+
+  const handleCameraCapture = (result) => {
     setCameraOpen(false)
-    if (plate) {
-      searchByPlateOrStockId(plate)
+    if (result.vehicles?.length > 0) {
+      setQuery(result.plate)
+      setVehicles(result.vehicles)
+      if (result.vehicles.length === 1) {
+        addNotification('Vehicle found!', 'success')
+        navigate(`/vehicle/${result.vehicles[0].id}`)
+      } else {
+        addNotification(`${result.vehicles.length} vehicles found`, 'success')
+      }
+    } else if (result.plate) {
+      searchByPlateOrStockId(result.plate)
+    } else if (result.candidates?.length) {
+      addNotification(`No match for: ${result.candidates.join(', ')}`, 'info')
     } else {
       addNotification('Could not detect plate or stock ID. Try again with a clearer image.', 'info')
     }
@@ -303,6 +331,7 @@ export function Search() {
         <CameraCapture
           onCapture={handleCameraCapture}
           onClose={() => setCameraOpen(false)}
+          searchFn={searchFn}
         />
       )}
     </div>
