@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { ArrowLeft, MapPin, Tag, Gauge, Calendar, Fuel, Settings2, Pencil } from 'lucide-react'
+import { Footer } from '../components/Footer'
 
 export function VehicleDetail() {
   const { id } = useParams()
@@ -220,6 +221,7 @@ export function VehicleDetail() {
         </button>
       )}
     </div>
+      <Footer />
       </main>
     </div>
   )

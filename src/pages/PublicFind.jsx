@@ -6,6 +6,7 @@ import { VehicleCard } from '../components/VehicleCard'
 import { CameraCapture } from '../components/CameraCapture'
 import { useNotification } from '../context/NotificationContext'
 import { Search as SearchIcon, Camera, LogIn, QrCode, X } from 'lucide-react'
+import { Footer } from '../components/Footer'
 
 const findPageUrl = () => `${window.location.origin}/find`
 
@@ -277,6 +278,8 @@ export function PublicFind() {
           </>
         )}
       </main>
+
+      <Footer />
 
       {cameraOpen && (
         <CameraCapture onCapture={handleCameraCapture} onClose={() => setCameraOpen(false)} />

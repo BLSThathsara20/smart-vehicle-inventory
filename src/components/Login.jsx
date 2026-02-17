@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { supabase } from "../lib/supabase";
 import { Car, Lock, Mail, UserPlus } from "lucide-react";
+import { Footer } from "./Footer";
 
 export function Login() {
   const [mode, setMode] = useState(null); // null = loading, 'register' | 'login'
@@ -172,6 +173,7 @@ export function Login() {
           </p>
         )}
       </div>
+      <Footer />
     </div>
   );
 }
