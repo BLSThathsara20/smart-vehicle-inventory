@@ -11,6 +11,7 @@ import { Search } from './pages/Search'
 import { PublicFind } from './pages/PublicFind'
 import { Settings } from './pages/Settings'
 import { Health } from './pages/Health'
+import { Space } from './pages/Space'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="add" element={<AddVehicle />} />
         <Route path="search" element={<Search />} />
         <Route path="health" element={<Health />} />
+        <Route path="space" element={<Space />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 

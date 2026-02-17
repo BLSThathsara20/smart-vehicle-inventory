@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Car, Plus, Search, Settings, Activity, MoreVertical } from 'lucide-react'
+import { Car, Plus, Search, Settings, Activity, MoreVertical, HardDrive } from 'lucide-react'
 
 const moreMenuItems = [
   { to: '/app/health', icon: Activity, label: 'App Health' },
+  { to: '/app/space', icon: HardDrive, label: 'Storage & Space' },
   { to: '/app/settings', icon: Settings, label: 'Settings' },
 ]
 
