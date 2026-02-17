@@ -47,7 +47,7 @@ export function Space() {
       setLoading(true)
       setError(null)
       try {
-        const { data: result, error: err } = await supabase.rpc('get_space_usage')
+        const { data: result, error: err } = await supabase.rpc('get_space_usage', {})
         if (err) throw err
         setData(result)
       } catch (err) {
