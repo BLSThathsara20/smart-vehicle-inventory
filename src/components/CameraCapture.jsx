@@ -59,9 +59,21 @@ export function CameraCapture({ onCapture, onClose }) {
     }
   }
 
+  const lastTapRef = useRef(0)
+  const handleDoubleTap = (e) => {
+    if (scanning || !stream) return
+    const now = Date.now()
+    if (now - lastTapRef.current < 400) {
+      lastTapRef.current = 0
+      handleCapture()
+    } else {
+      lastTapRef.current = now
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <div className="flex justify-between items-center p-4 bg-black/80">
+    <div className="fixed inset-0 z-50 bg-black flex flex-col h-screen overflow-hidden">
+      <div className="shrink-0 flex justify-between items-center p-4 bg-black/80">
         <span className="text-white font-medium">Scan plate or stock ID</span>
         <button
           type="button"
@@ -73,9 +85,13 @@ export function CameraCapture({ onCapture, onClose }) {
         </button>
       </div>
 
-      <div className="flex-1 relative flex items-center justify-center">
+      <div
+        data-video-area
+        className="flex-1 min-h-0 relative flex items-center justify-center overflow-hidden"
+        onClick={handleDoubleTap}
+      >
         {error && (
-          <div className="absolute top-4 left-4 right-4 p-4 rounded-lg bg-red-900/80 text-red-200 text-sm">
+          <div className="absolute top-4 left-4 right-4 p-4 rounded-lg bg-red-900/80 text-red-200 text-sm z-10">
             {error}
           </div>
         )}
@@ -90,7 +106,7 @@ export function CameraCapture({ onCapture, onClose }) {
         )}
         <canvas ref={canvasRef} className="hidden" />
         {scanning && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
             <div className="flex flex-col items-center gap-3 px-6 py-4 rounded-xl bg-black/80">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
               <span className="text-white text-sm">Reading text...</span>
@@ -99,9 +115,9 @@ export function CameraCapture({ onCapture, onClose }) {
         )}
       </div>
 
-      <div className="p-4 pb-8 safe-area-pb flex flex-col items-center gap-3">
+      <div className="shrink-0 p-4 pb-8 safe-area-pb flex flex-col items-center gap-3 bg-black">
         <p className="text-slate-400 text-sm text-center">
-          Point at plate or stock ID, then tap to capture
+          Tap button or double-tap video to capture
         </p>
         <button
           type="button"
