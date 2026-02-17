@@ -1,6 +1,7 @@
 import Tesseract from 'tesseract.js'
 
-const MAX_OCR_WIDTH = 400
+// Optimal for OCR: text height 20-40px. 800px width keeps detail without being too slow.
+const MAX_OCR_WIDTH = 800
 let workerPromise = null
 
 // UK plate patterns
@@ -11,7 +12,7 @@ function getWorker() {
   if (!workerPromise) {
     workerPromise = Tesseract.createWorker('eng', 1, { logger: () => {} }).then((w) => {
       w.setParameters({
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+        tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
       })
       return w
@@ -21,9 +22,9 @@ function getWorker() {
 }
 
 /**
- * Resize image for faster OCR
+ * Preprocess image for better OCR: resize, grayscale, contrast
  */
-function resizeForOCR(blob) {
+function preprocessForOCR(blob) {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
@@ -35,7 +36,22 @@ function resizeForOCR(blob) {
       canvas.height = h
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0, w, h)
-      canvas.toBlob((b) => resolve(b || blob), 'image/jpeg', 0.85)
+
+      const imageData = ctx.getImageData(0, 0, w, h)
+      const data = imageData.data
+
+      // Grayscale + contrast enhancement
+      const contrast = 1.3
+      const brightness = 0
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+        const adjusted = (gray - 128) * contrast + 128 + brightness
+        const v = Math.max(0, Math.min(255, Math.round(adjusted)))
+        data[i] = data[i + 1] = data[i + 2] = v
+      }
+      ctx.putImageData(imageData, 0, 0)
+
+      canvas.toBlob((b) => resolve(b || blob), 'image/jpeg', 0.92)
     }
     img.src = URL.createObjectURL(blob)
   })
@@ -63,12 +79,12 @@ export function extractPlateOrStockId(text) {
 }
 
 /**
- * Fast OCR - optimized for plate/stock ID
+ * OCR for plate/stock ID - preprocessed image, SPARSE_TEXT for full-frame photos
  */
-export async function recognizePlateFromImage(imageFile, onProgress) {
+export async function recognizePlateFromImage(imageFile) {
   const blob = imageFile instanceof Blob ? imageFile : await imageFile
-  const small = await resizeForOCR(blob)
+  const preprocessed = await preprocessForOCR(blob)
   const worker = await getWorker()
-  const { data } = await worker.recognize(small)
+  const { data } = await worker.recognize(preprocessed)
   return extractPlateOrStockId(data?.text)
 }
