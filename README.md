@@ -58,6 +58,12 @@ src/
 └── App.jsx
 ```
 
+## Deploy to GitHub Pages
+
+See [DEPLOY.md](./DEPLOY.md) for step-by-step instructions. After setup, the app will be live at:
+
+`https://blsthathsara20.github.io/smart-vehicle-inventory/`
+
 ## Tech stack
 
 - React 19 + Vite
