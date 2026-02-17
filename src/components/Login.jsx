@@ -79,7 +79,7 @@ export function Login() {
   const isRegister = mode === "register";
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-900">
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center">
