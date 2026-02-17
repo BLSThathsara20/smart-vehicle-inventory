@@ -29,6 +29,7 @@ export function VehicleForm({ vehicle, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
+  const [imagesToRemove, setImagesToRemove] = useState([])
   const [locationSuggestions, setLocationSuggestions] = useState([])
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false)
   const [locationQuery, setLocationQuery] = useState('')
@@ -74,14 +75,17 @@ export function VehicleForm({ vehicle, onSuccess }) {
 
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files || [])
-    if (files.length + imageFiles.length > 4) {
+    const currentTotal = existingImages.length - imagesToRemove.length + imageFiles.length
+    if (files.length + currentTotal > 4) {
       addNotification('Maximum 4 images allowed', 'error')
       return
     }
     const compressed = await compressImages(files)
-    setImageFiles((prev) => [...prev, ...compressed].slice(0, 4))
+    const maxNew = 4 - currentTotal
+    const toAdd = compressed.slice(0, maxNew)
+    setImageFiles((prev) => [...prev, ...toAdd].slice(0, 4))
     setImagePreviews((prev) => {
-      const newPreviews = compressed.map((f) => URL.createObjectURL(f))
+      const newPreviews = toAdd.map((f) => URL.createObjectURL(f))
       return [...prev, ...newPreviews].slice(0, 4)
     })
   }
@@ -90,6 +94,10 @@ export function VehicleForm({ vehicle, onSuccess }) {
     setImageFiles((prev) => prev.filter((_, i) => i !== idx))
     URL.revokeObjectURL(imagePreviews[idx])
     setImagePreviews((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const removeExistingImage = (img) => {
+    setImagesToRemove((prev) => [...prev, img.id])
   }
 
   const addFeatureField = () => {
@@ -148,7 +156,16 @@ export function VehicleForm({ vehicle, onSuccess }) {
         vehicleId = data.id
       }
 
+      if (imagesToRemove.length > 0 && vehicleId) {
+        const toRemove = (vehicle?.images || []).filter((img) => imagesToRemove.includes(img.id))
+        for (const img of toRemove) {
+          await supabase.storage.from('vehicle-images').remove([img.storage_path])
+        }
+        await supabase.from('vehicle_images').delete().in('id', imagesToRemove)
+      }
+
       if (imageFiles.length > 0) {
+        const existingCount = (vehicle?.images || []).length - imagesToRemove.length
         const paths = await Promise.all(
           imageFiles.map(async (file, i) => {
             const path = `${vehicleId}/${Date.now()}-${i}.jpg`
@@ -156,7 +173,7 @@ export function VehicleForm({ vehicle, onSuccess }) {
               upsert: true,
             })
             if (error) throw error
-            return { vehicle_id: vehicleId, storage_path: path, sort_order: i }
+            return { vehicle_id: vehicleId, storage_path: path, sort_order: existingCount + i }
           })
         )
         await supabase.from('vehicle_images').insert(paths)
@@ -172,6 +189,8 @@ export function VehicleForm({ vehicle, onSuccess }) {
   }
 
   const existingImages = vehicle?.images || []
+  const displayedExisting = existingImages.filter((img) => !imagesToRemove.includes(img.id))
+  const totalImageCount = displayedExisting.length + imageFiles.length
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -420,9 +439,17 @@ export function VehicleForm({ vehicle, onSuccess }) {
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-2">Images (1-4, compressed)</label>
         <div className="flex flex-wrap gap-2">
-          {existingImages.map((img) => (
-            <div key={img.id} className="w-20 h-20 rounded-lg overflow-hidden bg-slate-700">
+          {displayedExisting.map((img) => (
+            <div key={img.id} className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-700">
               <img src={img.url} alt="" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => removeExistingImage(img)}
+                className="absolute top-1 right-1 p-1 rounded-full bg-red-600 hover:bg-red-500 text-white"
+                aria-label="Remove image"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </div>
           ))}
           {imagePreviews.map((url, i) => (
@@ -431,19 +458,32 @@ export function VehicleForm({ vehicle, onSuccess }) {
               <button
                 type="button"
                 onClick={() => removeImage(i)}
-                className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white"
+                className="absolute top-1 right-1 p-1 rounded-full bg-red-600 hover:bg-red-500 text-white"
+                aria-label="Remove image"
               >
                 <X className="w-3 h-3" />
               </button>
             </div>
           ))}
-          {imageFiles.length + existingImages.length < 4 && (
+          {totalImageCount < 4 && (
             <label className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-600 flex items-center justify-center cursor-pointer hover:border-orange-500 transition">
               <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
               <ImagePlus className="w-8 h-8 text-slate-500" />
             </label>
           )}
         </div>
+        {imagesToRemove.length > 0 && (
+          <p className="text-slate-500 text-xs mt-1">
+            {imagesToRemove.length} image{imagesToRemove.length !== 1 ? 's' : ''} will be removed on save.{' '}
+            <button
+              type="button"
+              onClick={() => setImagesToRemove([])}
+              className="text-orange-400 hover:text-orange-300"
+            >
+              Undo
+            </button>
+          </p>
+        )}
       </div>
 
       <button
