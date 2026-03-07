@@ -8,7 +8,7 @@ export function AddVehicle() {
   return (
     <div>
       <h1 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <Plus className="w-6 h-6 text-orange-500" />
+        <Plus className="w-6 h-6 text-amber-400" />
         Add Vehicle
       </h1>
       <VehicleForm onSuccess={() => navigate('/app/inventory')} />

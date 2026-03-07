@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '../lib/supabase'
 import { VehicleCard } from '../components/VehicleCard'
@@ -10,8 +10,6 @@ import { Footer } from '../components/Footer'
 
 const findPageUrl = () => `${window.location.origin}/find`
 
-const BRANDS = ['Audi', 'BMW', 'Fiat', 'Honda', 'Kia', 'Lexus', 'Mazda', 'Mercedes-Benz', 'Nissan', 'Toyota']
-
 export function PublicFind() {
   const [query, setQuery] = useState('')
   const [vehicles, setVehicles] = useState([])
@@ -19,12 +17,19 @@ export function PublicFind() {
   const [brandFilter, setBrandFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
   const [models, setModels] = useState([])
+  const [brands, setBrands] = useState([])
   const [cameraOpen, setCameraOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
-  const navigate = useNavigate()
   const { addNotification } = useNotification()
 
   const shouldSearch = query.trim() || brandFilter || modelFilter
+
+  useEffect(() => {
+    supabase.from('vehicles').select('brand').not('brand', 'is', null).then(({ data }) => {
+      const b = [...new Set((data || []).map((r) => r.brand).filter(Boolean))].sort()
+      setBrands(b)
+    })
+  }, [])
 
   useEffect(() => {
     if (!brandFilter) {
@@ -108,8 +113,8 @@ export function PublicFind() {
       setVehicles(withUrls)
       if (withUrls.length === 1) {
         addNotification('Vehicle found!', 'success')
-        navigate(`/vehicle/${withUrls[0].id}`)
-      } else if (withUrls.length === 0) {
+      }
+      if (withUrls.length === 0) {
         addNotification(`No vehicle found for: ${q}`, 'info')
       }
     } catch {
@@ -141,12 +146,7 @@ export function PublicFind() {
     if (result.vehicles?.length > 0) {
       setQuery(result.plate)
       setVehicles(result.vehicles)
-      if (result.vehicles.length === 1) {
-        addNotification('Vehicle found!', 'success')
-        navigate(`/vehicle/${result.vehicles[0].id}`)
-      } else {
-        addNotification(`${result.vehicles.length} vehicles found`, 'success')
-      }
+      addNotification(result.vehicles.length === 1 ? 'Vehicle found!' : `${result.vehicles.length} vehicles found`, 'success')
     } else if (result.plate) {
       searchByPlateOrStockId(result.plate)
     } else if (result.candidates?.length) {
@@ -247,7 +247,7 @@ export function PublicFind() {
                 className="w-full px-4 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">All brands</option>
-                {BRANDS.map((b) => (
+                {brands.map((b) => (
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
@@ -303,7 +303,7 @@ export function PublicFind() {
             <p className="text-slate-400 text-sm mb-4">{vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} found</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {vehicles.map((v) => (
-                <VehicleCard key={v.id} vehicle={v} />
+                <VehicleCard key={v.id} vehicle={v} linkToDetail={false} />
               ))}
             </div>
           </>

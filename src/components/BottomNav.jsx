@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Car, Plus, Search, Settings, Activity, MoreVertical, HardDrive } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, MoreHorizontal, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const moreMenuItems = [
-  { to: '/app/health', icon: Activity, label: 'App Health' },
-  { to: '/app/space', icon: HardDrive, label: 'Storage & Space' },
-  { to: '/app/settings', icon: Settings, label: 'Settings' },
+  { to: '/app/notifications', icon: Bell, label: 'Notifications', permission: 'inventory:view' },
+  { to: '/app/health', icon: Activity, label: 'App Health', permission: 'health:view' },
+  { to: '/app/space', icon: HardDrive, label: 'Storage & Space', permission: 'space:view' },
+  { to: '/app/roles', icon: Shield, label: 'Roles & Permissions', permission: 'roles:manage' },
+  { to: '/app/users', icon: UsersIcon, label: 'Users', permission: 'users:manage' },
+  { to: '/app/settings', icon: Settings, label: 'Settings', permission: 'settings:view' },
 ]
 
 export function BottomNav() {
@@ -13,9 +17,13 @@ export function BottomNav() {
   const menuRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
+  const { hasPermission, isSuperAdmin } = useAuth()
 
-  const isMoreActive = moreMenuItems.some((item) => location.pathname === item.to)
-  const isSearchActive = location.pathname === '/app' || location.pathname === '/app/search'
+  const filteredMoreItems = moreMenuItems.filter(
+    (item) => !item.permission || isSuperAdmin() || hasPermission(item.permission)
+  )
+  const isMoreActive = filteredMoreItems.some((item) => location.pathname === item.to)
+  const isOverviewActive = location.pathname === '/app' || location.pathname === '/app/search'
 
   useEffect(() => {
     setMoreOpen(false)
@@ -38,92 +46,97 @@ export function BottomNav() {
     setMoreOpen(false)
   }
 
+  const navItems = [
+    { to: '/app', icon: LayoutGrid, label: 'Overview', permission: 'search:view' },
+    { to: '/app/inventory', icon: Car, label: 'Inventory', permission: 'inventory:view' },
+    { to: '/app/add', icon: PlusCircle, label: 'Add', permission: 'inventory:add' },
+  ].filter((item) => !item.permission || isSuperAdmin() || hasPermission(item.permission))
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-700 safe-area-pb">
-      <div className="flex items-end justify-center gap-1 h-20 max-w-lg mx-auto px-2">
-        {/* Inventory */}
-        <NavLink
-          to="/app/inventory"
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-end flex-1 pb-3 pt-2 gap-1 transition ${
-              isActive ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
-            }`
-          }
-        >
-          <Car className="w-6 h-6" />
-          <span className="text-xs font-medium">Inventory</span>
-        </NavLink>
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/98 backdrop-blur-xl border-t border-zinc-800/80 safe-area-pb shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
+      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
+        {navItems.map((item) => {
+          const Icon = item.icon
+          const isActive = item.to === '/app' ? isOverviewActive : location.pathname === item.to
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/app' ? false : true}
+              className={() =>
+                `flex flex-col items-center justify-center flex-1 gap-1.5 py-2 transition-all duration-200 ${
+                  isActive ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-300'
+                }`
+              }
+            >
+              <Icon
+                className={`w-5 h-5 transition-all ${isActive ? 'stroke-[2.5]' : 'stroke-[1.5]'}`}
+              />
+              <span
+                className={`text-[11px] font-medium tracking-wide ${
+                  isActive ? 'text-amber-400' : 'text-zinc-500'
+                }`}
+              >
+                {item.label}
+              </span>
+            </NavLink>
+          )
+        })}
 
-        {/* Add Vehicle */}
-        <NavLink
-          to="/app/add"
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-end flex-1 pb-3 pt-2 gap-1 transition ${
-              isActive ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
-            }`
-          }
-        >
-          <Plus className="w-6 h-6" />
-          <span className="text-xs font-medium">Add</span>
-        </NavLink>
-
-        {/* Search - center, big, creative */}
-        <div className="flex-1 flex justify-center items-end pb-2">
-          <NavLink
-            to="/app"
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center w-14 h-14 -mt-4 rounded-2xl shadow-lg transition-all duration-200 ${
-                isActive || isSearchActive
-                  ? 'bg-orange-500 text-white shadow-orange-500/30 scale-105'
-                  : 'bg-slate-800 text-slate-300 hover:bg-orange-500/20 hover:text-orange-400 border border-slate-700'
-              }`
-            }
-          >
-            <Search className="w-7 h-7" strokeWidth={2.5} />
-            <span className="text-[10px] font-semibold mt-0.5">Search</span>
-          </NavLink>
-        </div>
-
-        {/* More - three dots */}
-        <div className="flex-1 flex justify-center items-end pb-3 pt-2 relative" ref={menuRef}>
+        {/* More */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-2 relative" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMoreOpen((o) => !o)}
-            className={`flex flex-col items-center gap-1 transition ${
-              isMoreActive ? 'text-orange-500' : 'text-slate-400 hover:text-slate-200'
+            className={`flex flex-col items-center gap-1.5 transition-all duration-200 ${
+              isMoreActive ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-300'
             }`}
             aria-label="More options"
             aria-expanded={moreOpen}
           >
-            <MoreVertical className="w-6 h-6" />
-            <span className="text-xs font-medium">More</span>
+            <MoreHorizontal
+              className={`w-5 h-5 ${isMoreActive ? 'stroke-[2.5]' : 'stroke-[1.5]'}`}
+            />
+            <span
+              className={`text-[11px] font-medium tracking-wide ${
+                isMoreActive ? 'text-amber-400' : 'text-zinc-500'
+              }`}
+            >
+              More
+            </span>
           </button>
 
-          {/* More menu popover */}
           {moreOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 py-2 rounded-xl bg-slate-800 border border-slate-700 shadow-xl animate-slide-up">
-              {moreMenuItems.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.to}
-                    type="button"
-                    onClick={() => handleMoreItemClick(item.to)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition ${
-                      location.pathname === item.to
-                        ? 'bg-orange-500/20 text-orange-400'
-                        : 'text-slate-300 hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">{item.label}</span>
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div
+                className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
+                aria-hidden
+                onClick={() => setMoreOpen(false)}
+              />
+              <div className="fixed left-0 right-0 bottom-16 z-[110] md:absolute md:left-1/2 md:right-auto md:bottom-full md:mb-3 md:bottom-auto md:w-56 md:-translate-x-1/2 rounded-t-2xl md:rounded-xl bg-zinc-900 border border-zinc-700/80 border-b-0 md:border-b md:border-zinc-700/80 shadow-2xl py-3 md:py-2 max-h-[65vh] md:max-h-[80vh] overflow-y-auto">
+                <div className="w-10 h-1 rounded-full bg-zinc-600 mx-auto mb-2 md:hidden" aria-hidden />
+                {filteredMoreItems.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.to}
+                      type="button"
+                      onClick={() => handleMoreItemClick(item.to)}
+                      className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition active:bg-zinc-800/80 ${
+                        location.pathname === item.to
+                          ? 'bg-amber-500/10 text-amber-400'
+                          : 'text-zinc-300 hover:bg-zinc-800/80'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0 text-zinc-400" />
+                      <span className="font-medium text-sm">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
-
       </div>
     </nav>
   )

@@ -2,11 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Orange theme & mobile-first */
+/* Car Inventory - luxury dark theme */
 :root {
-  --color-primary: #f97316;
-  --color-primary-hover: #ea580c;
-  --color-primary-muted: rgba(249, 115, 22, 0.2);
+  --color-primary: #f59e0b;
+  --color-primary-hover: #d97706;
+  --color-primary-muted: rgba(245, 158, 11, 0.15);
 }
 
 /* Safe area for mobile bottom nav (notch/home indicator) */

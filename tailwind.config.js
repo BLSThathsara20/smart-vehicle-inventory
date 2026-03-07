@@ -5,9 +5,9 @@ export default {
 		extend: {
 			colors: {
 				primary: {
-					DEFAULT: "#f97316",
-					hover: "#ea580c",
-					muted: "rgba(249, 115, 22, 0.2)",
+					DEFAULT: "#f59e0b",
+					hover: "#d97706",
+					muted: "rgba(245, 158, 11, 0.15)",
 				},
 			},
 			animation: {
