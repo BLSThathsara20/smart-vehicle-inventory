@@ -10,8 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.96.0",
+    "@sanity/client": "^7.20.0",
     "browser-image-compression": "^2.0.2",
+    "firebase": "^12.11.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.574.0",
@@ -19,6 +20,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.13.0",
+    "recharts": "^2.15.0",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },

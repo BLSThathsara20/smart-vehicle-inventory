@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { MapPin, Tag, Lock, CheckCircle } from 'lucide-react'
+import { normalizeVehicleWorkflowInstances, getWorkflowDeadlineVisual } from '../lib/sanityData'
 
 export function VehicleCard({ vehicle, linkToDetail = true, modelCount }) {
   const primaryImage = vehicle.images?.[0]?.url
@@ -88,6 +89,34 @@ export function VehicleCard({ vehicle, linkToDetail = true, modelCount }) {
             <span className="text-amber-400 font-medium">£{Number(vehicle.selling_price).toLocaleString()}</span>
           )}
         </div>
+        {(() => {
+          const activeWf = normalizeVehicleWorkflowInstances(vehicle).filter((i) => i.status === 'active')
+          if (!activeWf.length) return null
+          return (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {activeWf.map((inst) => {
+                const vis = getWorkflowDeadlineVisual(inst)
+                const cls =
+                  vis.tone === 'overdue'
+                    ? 'bg-red-500/15 text-red-400 border-red-500/35'
+                    : vis.tone === 'due_soon'
+                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/35'
+                      : vis.tone === 'urgent'
+                        ? 'bg-orange-500/15 text-orange-300 border-orange-500/35'
+                        : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                return (
+                  <span
+                    key={inst.instance_id}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${cls}`}
+                  >
+                    {inst.template_name}
+                    {vis.label ? ` · ${vis.label}` : ''}
+                  </span>
+                )
+              })}
+            </div>
+          )
+        })()}
         <div className="flex flex-wrap gap-3 mt-2 text-xs text-zinc-600">
           {vehicle.location && (
             <span className="flex items-center gap-1.5 truncate">

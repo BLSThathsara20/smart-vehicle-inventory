@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { useEffect, useMemo, useState } from 'react'
+import { createUserWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth'
+import { getSecondaryAuth } from '../lib/firebase'
+import {
+  fetchAllUserProfiles,
+  fetchAllRoles,
+  createUserProfileDoc,
+  updateUserProfileDoc,
+  deleteUserProfileDoc,
+} from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { Users as UsersIcon, Plus, Pencil, Loader2, X, Mail, Lock, Trash2 } from 'lucide-react'
@@ -14,8 +22,14 @@ export function Users() {
   const [editUser, setEditUser] = useState(null)
   const [deleteUser, setDeleteUser] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('all')
 
   const canManage = hasPermission('users:manage') || hasPermission('roles:manage') || isSuperAdmin()
+
+  const filteredUsers = useMemo(() => {
+    if (roleFilter === 'all') return users
+    return users.filter((u) => u.role?.name === roleFilter)
+  }, [users, roleFilter])
 
   const superAdmins = users.filter((u) => u.role?.name === 'super_admin')
   const oldestSuperAdminId = superAdmins.length
@@ -23,7 +37,7 @@ export function Users() {
     : null
 
   function canDeleteUser(u) {
-    if (u.user_id === currentUser?.id) return false
+    if (u.user_id === currentUser?.uid) return false
     if (u.role?.name !== 'super_admin') return true
     return u.user_id !== oldestSuperAdminId
   }
@@ -35,22 +49,9 @@ export function Users() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [profilesRes, rolesRes] = await Promise.all([
-        supabase.from('profiles').select(`
-          id,
-          user_id,
-          role_id,
-          email,
-          display_name,
-          created_at,
-          role:roles (id, name, description)
-        `).order('created_at', { ascending: false }),
-        supabase.from('roles').select('id, name, description, is_system').order('name'),
-      ])
-      if (profilesRes.error) throw profilesRes.error
-      if (rolesRes.error) throw rolesRes.error
-      setUsers(profilesRes.data || [])
-      setRoles(rolesRes.data || [])
+      const [profilesRes, rolesRes] = await Promise.all([fetchAllUserProfiles(), fetchAllRoles()])
+      setUsers(profilesRes || [])
+      setRoles(rolesRes || [])
     } catch (err) {
       addNotification(err.message || 'Failed to load users', 'error')
     } finally {
@@ -86,6 +87,32 @@ export function Users() {
         </button>
       </div>
 
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-4 mb-6">
+        <label htmlFor="user-role-filter" className="text-sm text-zinc-500 shrink-0">
+          Filter by role
+        </label>
+        <select
+          id="user-role-filter"
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="w-full sm:w-64 px-4 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-white text-sm focus:ring-2 focus:ring-amber-500/40"
+        >
+          <option value="all">All roles</option>
+          {[...(roles || [])]
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+            .map((r) => (
+              <option key={r.id} value={r.name}>
+                {String(r.name || '').replace(/_/g, ' ')}
+              </option>
+            ))}
+        </select>
+        {roleFilter !== 'all' && (
+          <span className="text-xs text-zinc-600">
+            {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24">
           <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
@@ -93,7 +120,10 @@ export function Users() {
         </div>
       ) : (
         <div className="space-y-3">
-          {users.map((u) => (
+          {filteredUsers.length === 0 ? (
+            <p className="text-zinc-500 text-sm py-8 text-center">No users match this role.</p>
+          ) : (
+          filteredUsers.map((u) => (
             <div
               key={u.id}
               className="flex items-start justify-between gap-3 p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50"
@@ -117,7 +147,7 @@ export function Users() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {u.user_id === currentUser?.id ? (
+                {u.user_id === currentUser?.uid ? (
                   <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400">
                     You
                   </span>
@@ -145,7 +175,8 @@ export function Users() {
                 )}
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       )}
 
@@ -169,7 +200,7 @@ export function Users() {
           onSuccess={() => {
             setEditUser(null)
             fetchData()
-            if (editUser.user_id === currentUser?.id) refreshProfile()
+            if (editUser.user_id === currentUser?.uid) refreshProfile()
           }}
           addNotification={addNotification}
         />
@@ -217,26 +248,16 @@ function AddUserModal({ roles, onClose, onSuccess, addNotification }) {
     setSaving(true)
     setCreatedUrl(null)
     try {
-      const { data: { session: prevSession } } = await supabase.auth.getSession()
-      const { data, error } = await supabase.auth.signUp({
+      const secondary = getSecondaryAuth()
+      if (!secondary) throw new Error('Auth not configured')
+      const cred = await createUserWithEmailAndPassword(secondary, email.trim(), password)
+      await firebaseSignOut(secondary)
+      await createUserProfileDoc({
+        firebase_uid: cred.user.uid,
         email: email.trim(),
-        password,
-        options: { emailRedirectTo: getResetPasswordUrl() || undefined },
-      })
-      if (error) throw error
-      if (prevSession?.access_token && prevSession?.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: prevSession.access_token,
-          refresh_token: prevSession.refresh_token,
-        })
-      }
-      const { error: profileErr } = await supabase.from('profiles').insert({
-        user_id: data.user.id,
+        display_name: displayName || '',
         role_id: roleId,
-        email: email.trim(),
-        display_name: displayName || null,
       })
-      if (profileErr) throw profileErr
       addNotification('User created successfully', 'success')
       setCreatedUrl(getResetPasswordUrl())
     } catch (err) {
@@ -375,15 +396,10 @@ function EditUserModal({ user, roles, onClose, onSuccess, addNotification }) {
     e.preventDefault()
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          display_name: displayName || null,
-          ...(isSuperAdmin ? {} : { role_id: roleId }),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-      if (error) throw error
+      await updateUserProfileDoc(user.id, {
+        display_name: displayName || null,
+        ...(isSuperAdmin ? {} : { role_id: roleId }),
+      })
       addNotification('User updated', 'success')
       onSuccess()
     } catch (err) {
@@ -458,8 +474,7 @@ function DeleteUserModal({ user, onClose, onSuccess, addNotification }) {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', user.id)
-      if (error) throw error
+      await deleteUserProfileDoc(user.id)
       addNotification('User deleted', 'success')
       onSuccess()
     } catch (err) {

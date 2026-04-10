@@ -7,7 +7,8 @@ export function RequirePermission({ permission, children }) {
     isSuperAdmin() ||
     hasPermission(permission) ||
     // Fallback: roles:manage implies admin-level access (super_admin or admin)
-    (permission === 'users:manage' && hasPermission('roles:manage'))
+    (permission === 'users:manage' && hasPermission('roles:manage')) ||
+    (permission === 'workflows:manage' && hasPermission('roles:manage'))
   if (allowed) return children
   return (
     <div className="p-4 space-y-3">

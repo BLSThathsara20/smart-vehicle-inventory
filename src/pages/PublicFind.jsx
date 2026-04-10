@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { supabase } from '../lib/supabase'
+import { fetchBrandsAndModels, fetchVehiclesForList, fetchVehiclesByPlateOrStock } from '../lib/sanityData'
 import { VehicleCard } from '../components/VehicleCard'
 import { CameraCapture } from '../components/CameraCapture'
 import { useNotification } from '../context/NotificationContext'
@@ -17,6 +17,7 @@ export function PublicFind() {
   const [brandFilter, setBrandFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
   const [models, setModels] = useState([])
+  const [modelsByBrandMap, setModelsByBrandMap] = useState({})
   const [brands, setBrands] = useState([])
   const [cameraOpen, setCameraOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
@@ -25,9 +26,9 @@ export function PublicFind() {
   const shouldSearch = query.trim() || brandFilter || modelFilter
 
   useEffect(() => {
-    supabase.from('vehicles').select('brand').not('brand', 'is', null).then(({ data }) => {
-      const b = [...new Set((data || []).map((r) => r.brand).filter(Boolean))].sort()
+    fetchBrandsAndModels().then(({ brands: b, modelsByBrand }) => {
       setBrands(b)
+      setModelsByBrandMap(modelsByBrand)
     })
   }, [])
 
@@ -37,16 +38,9 @@ export function PublicFind() {
       setModelFilter('')
       return
     }
-    supabase
-      .from('vehicles')
-      .select('model')
-      .ilike('brand', brandFilter)
-      .then(({ data }) => {
-        const unique = [...new Set((data || []).map((r) => r.model).filter(Boolean))].sort()
-        setModels(unique)
-        setModelFilter('')
-      })
-  }, [brandFilter])
+    setModels(modelsByBrandMap[brandFilter] || [])
+    setModelFilter('')
+  }, [brandFilter, modelsByBrandMap])
 
   useEffect(() => {
     if (!shouldSearch) {
@@ -60,27 +54,11 @@ export function PublicFind() {
   async function searchVehicles() {
     setLoading(true)
     try {
-      let qb = supabase
-        .from('vehicles')
-        .select(`*, vehicle_images (id, storage_path, sort_order)`)
-
-      if (query.trim()) {
-        qb = qb.or(
-          `stock_id.ilike.%${query.trim()}%,plate_no.ilike.%${query.trim()}%,brand.ilike.%${query.trim()}%,model.ilike.%${query.trim()}%,location.ilike.%${query.trim()}%`
-        )
-      }
-      if (brandFilter) qb = qb.ilike('brand', brandFilter)
-      if (modelFilter) qb = qb.ilike('model', modelFilter)
-
-      const { data, error } = await qb.limit(50)
-      if (error) throw error
-
-      const withUrls = (data || []).map((v) => {
-        const images = (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-        return { ...v, images }
+      const withUrls = await fetchVehiclesForList({
+        search: query.trim() || undefined,
+        brand: brandFilter || undefined,
+        model: modelFilter || undefined,
+        limit: 50,
       })
       setVehicles(withUrls)
     } catch {
@@ -96,20 +74,7 @@ export function PublicFind() {
     setQuery(q)
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(`*, vehicle_images (id, storage_path, sort_order)`)
-        .or(`plate_no.ilike.%${q}%,stock_id.ilike.%${q}%`)
-        .limit(5)
-      if (error) throw error
-
-      const withUrls = (data || []).map((v) => {
-        const images = (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-        return { ...v, images }
-      })
+      const withUrls = await fetchVehiclesByPlateOrStock(q)
       setVehicles(withUrls)
       if (withUrls.length === 1) {
         addNotification('Vehicle found!', 'success')
@@ -125,20 +90,8 @@ export function PublicFind() {
   }
 
   const searchFn = async (q) => {
-    const { data, error } = await supabase
-      .from('vehicles')
-      .select(`*, vehicle_images (id, storage_path, sort_order)`)
-      .or(`plate_no.ilike.%${q}%,stock_id.ilike.%${q}%`)
-      .limit(5)
-    if (error) return { vehicles: [] }
-    const withUrls = (data || []).map((v) => {
-      const images = (v.vehicle_images || []).map((img) => ({
-        ...img,
-        url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-      }))
-      return { ...v, images }
-    })
-    return { vehicles: withUrls }
+    const vehicles = await fetchVehiclesByPlateOrStock(q)
+    return { vehicles }
   }
 
   const handleCameraCapture = (result) => {

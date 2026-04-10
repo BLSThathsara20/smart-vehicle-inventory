@@ -1,89 +1,83 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth'
+import { auth, hasFirebaseConfig } from '../lib/firebase'
+import { hasSanityConfig } from '../lib/sanity'
+import {
+  fetchProfileWithPermissions,
+  ensureBootstrap,
+  ensureUserProfileForFirebaseUser,
+} from '../lib/sanityData'
 
 const AuthContext = createContext(null)
-
-async function fetchProfileWithPermissions(userId) {
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select(`
-      id,
-      role_id,
-      email,
-      display_name,
-      role:roles (
-        id,
-        name,
-        description
-      )
-    `)
-    .eq('user_id', userId)
-    .single()
-
-  if (profileError || !profile) return null
-
-  const { data: perms } = await supabase
-    .from('role_permissions')
-    .select('permission:permissions(code)')
-    .eq('role_id', profile.role_id)
-
-  const permissionCodes = (perms || [])
-    .map((p) => p.permission?.code)
-    .filter(Boolean)
-
-  return {
-    ...profile,
-    permissions: permissionCodes,
-  }
-}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
+  const configOk = hasFirebaseConfig() && hasSanityConfig
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+    if (!auth || !configOk) {
+      setLoading(false)
+      return
+    }
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          await ensureBootstrap()
+          await ensureUserProfileForFirebaseUser(u)
+        } catch {
+          /* profile bootstrap best-effort */
+        }
+      }
+      setUser(u)
       setLoading(false)
     })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => unsub()
+  }, [configOk])
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!configOk || !user?.uid) {
       setProfile(null)
       setProfileLoading(false)
       return
     }
     setProfileLoading(true)
-    fetchProfileWithPermissions(user.id).then((p) => {
-      setProfile(p)
-      setProfileLoading(false)
-    })
-  }, [user?.id])
+    fetchProfileWithPermissions(user.uid)
+      .then((p) => setProfile(p))
+      .finally(() => setProfileLoading(false))
+  }, [configOk, user?.uid])
 
   const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-    return data
+    if (!auth) throw new Error('Firebase not configured')
+    const cred = await signInWithEmailAndPassword(auth, email, password)
+    return cred
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const signOutUser = async () => {
+    if (!auth) return
+    await signOut(auth)
     setProfile(null)
   }
 
   const signUp = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) throw error
-    return data
+    if (!auth) throw new Error('Firebase not configured')
+    return createUserWithEmailAndPassword(auth, email, password)
+  }
+
+  const signInWithGoogle = async () => {
+    if (!auth) throw new Error('Firebase not configured')
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: 'select_account' })
+    return signInWithPopup(auth, provider)
   }
 
   const hasPermission = (code) => {
@@ -98,7 +92,7 @@ export function AuthProvider({ children }) {
   }
 
   const refreshProfile = () => {
-    if (user?.id) fetchProfileWithPermissions(user.id).then(setProfile)
+    if (user?.uid) fetchProfileWithPermissions(user.uid).then(setProfile)
   }
 
   const ready = loading || (user && profileLoading)
@@ -109,9 +103,11 @@ export function AuthProvider({ children }) {
         user,
         profile,
         loading: ready,
+        configOk,
         signIn,
-        signOut,
+        signOut: signOutUser,
         signUp,
+        signInWithGoogle,
         hasPermission,
         isSuperAdmin,
         refreshProfile,

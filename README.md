@@ -1,74 +1,41 @@
 # Vehicle Inventory Management
 
-A mobile-first vehicle inventory management system for car sales, built with React, Supabase, and Tailwind CSS.
+A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (data), **ImgBB** (images), **Tailwind CSS**.
 
 ## Features
 
-- **Vehicle inventory** – Stock ID, plate number, brand, model, body, details, color, mileage, CC, model year, fuel type, gear, features (JSON), sold/reserved status
-- **Images** – 1–4 images per vehicle, compressed before upload
-- **Super admin** – First-time registration (one-time only), then login
-- **Search** – By stock ID, plate, brand, model, location
-- **Mobile-first** – Responsive design with sticky bottom navigation
-- **Orange theme** – Consistent branding
-- **Notifications** – Toast notifications for actions
+- Vehicle inventory with dealer-oriented fields, reservation workflow, customer pickup links
+- **Firebase** – email/password sign-in and registration; password reset via email
+- **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
+- **ImgBB** – vehicle photos stored as URLs on each vehicle document
+- Search, filters, notifications, export (PDF/Excel), mobile-first UI
 
 ## Setup
 
-### 1. Install dependencies
+### 1. Install
 
 ```bash
 npm install
 ```
 
-### 2. Environment variables
+### 2. Environment
 
-Copy `.env.example` to `.env` and fill in your Supabase credentials:
+Copy `.env.example` to `.env` and set:
 
-- `VITE_SUPABASE_URL` – Project URL from Supabase Dashboard > Project Settings > API
-- `VITE_SUPABASE_ANON_KEY` – Publishable/anon key from the same page
-- `SUPABASE_DB_PASSWORD` – Database password (for reference; not used by the frontend client)
+- **Firebase** – Web app config from Firebase Console. Under **Authentication → Sign-in method**, enable **Google** and **Email/Password**. Add your domains under **Authorized domains** (e.g. `localhost`, production host).
+- **Sanity** – Project ID, dataset (e.g. `production`), API version, and a token with **Editor** access (needed for browser writes)
+- **ImgBB** – API key from [ImgBB API](https://api.imgbb.com/)
 
-### 3. Supabase setup
+> Putting `VITE_SANITY_TOKEN` in the client exposes write access in the bundle. For production, prefer a backend or Sanity Actions; this matches a frontend-only setup.
 
-1. **Database schema** – Run `supabase-schema.sql` in Supabase SQL Editor (Dashboard > SQL Editor).
-
-2. **Migration (if you already have tables)** – Run `supabase/migrations/001_super_admin_first_time_registration.sql` to add the admins table and RLS for first-time super admin registration.
-
-3. **Storage bucket** – If the schema doesn’t create it, create a bucket manually:
-   - Dashboard > Storage > New bucket
-   - Name: `vehicle-images`
-   - Public: Yes
-
-4. **Auth** – On first visit, the app shows **Super Admin Registration**. Register once; after that only the login form is shown. No need to create users in the dashboard.
-
-### 4. Run the app
+### 3. Run
 
 ```bash
 npm run dev
 ```
 
-## Project structure
+The first registered user gets the **super_admin** Sanity role (subsequent users default to **mechanic**).
 
-```
-src/
-├── components/     # Reusable UI components
-├── context/        # Auth & Notification context
-├── lib/            # Supabase client, image compression
-├── pages/          # Route pages
-└── App.jsx
-```
+## Legacy Supabase
 
-## Deploy to GitHub Pages
-
-See [DEPLOY.md](./DEPLOY.md) for step-by-step instructions. After setup, the app will be live at:
-
-`https://blsthathsara20.github.io/smart-vehicle-inventory/`
-
-## Tech stack
-
-- React 19 + Vite
-- Supabase (Auth, Database, Storage)
-- React Router
-- Tailwind CSS
-- Lucide React (icons)
-- browser-image-compression
+The `supabase/` SQL files are **not** used by this frontend anymore. Keep them only if you still need a reference or one-off data migration into Sanity.

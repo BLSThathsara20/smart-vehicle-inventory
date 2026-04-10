@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '../lib/firebase'
 import { useNotification } from '../context/NotificationContext'
 import { Lock, Mail, ArrowLeft } from 'lucide-react'
 import { Footer } from '../components/Footer'
@@ -20,11 +21,11 @@ export function ResetPassword() {
     setLoading(true)
     setSent(false)
     try {
+      if (!auth) throw new Error('Firebase not configured')
       const redirectTo = `${window.location.origin}${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/login`
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo,
+      await sendPasswordResetEmail(auth, email.trim(), {
+        url: redirectTo,
       })
-      if (error) throw error
       setSent(true)
       addNotification('Check your email for the reset link', 'success')
     } catch (err) {

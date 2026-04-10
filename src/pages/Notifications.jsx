@@ -1,22 +1,40 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { fetchAppNotifications } from '../lib/notificationService'
-import { Bell, Loader2, Car, Calendar, ClipboardCheck, AlertTriangle } from 'lucide-react'
+import { fetchActiveAppNotifications } from '../lib/notificationService'
+import { dismissNotificationId } from '../lib/notificationDismissState'
+import { useAuth } from '../context/AuthContext'
+import {
+  Bell,
+  Loader2,
+  Car,
+  Calendar,
+  ClipboardCheck,
+  AlertTriangle,
+  ClipboardList,
+  MessageCircle,
+} from 'lucide-react'
 
 export function Notifications() {
   const navigate = useNavigate()
+  const { user, hasPermission } = useAuth()
+  const canView = hasPermission('inventory:view')
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!canView || !user?.uid) {
+      setLoading(false)
+      setNotifications([])
+      return
+    }
     loadNotifications()
-  }, [])
+  }, [canView, user?.uid])
 
   async function loadNotifications() {
+    if (!user?.uid) return
     setLoading(true)
     try {
-      const items = await fetchAppNotifications()
+      const items = await fetchActiveAppNotifications(user.uid)
       setNotifications(items)
     } catch (err) {
       console.error(err)
@@ -29,7 +47,29 @@ export function Notifications() {
     if (type === 'delivery_today' || type === 'delivery_soon') return Calendar
     if (type === 'pdi_due') return ClipboardCheck
     if (type === 'mot_expiry') return AlertTriangle
+    if (type === 'work_assigned') return ClipboardList
+    if (type === 'work_comment') return MessageCircle
     return Car
+  }
+
+  function openNotification(n) {
+    dismissNotificationId(n.id)
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id))
+    if (n.instanceId && n.vehicleId) {
+      navigate(`/app/work/${n.vehicleId}/${n.instanceId}`)
+      return
+    }
+    if (n.vehicleId) {
+      navigate(`/vehicle/${n.vehicleId}`)
+    }
+  }
+
+  if (!canView) {
+    return (
+      <div className="p-4">
+        <p className="text-zinc-400">You don&apos;t have permission to view notifications.</p>
+      </div>
+    )
   }
 
   return (
@@ -39,7 +79,9 @@ export function Notifications() {
           <Bell className="w-6 h-6 text-amber-500" />
           Notifications
         </h1>
-        <p className="text-zinc-500 text-sm mt-1">Delivery dates, PDI due, MOT expiry</p>
+        <p className="text-zinc-500 text-sm mt-1">
+          Deliveries, PDI &amp; MOT, prep-path assignments, and comments (including direct messages).
+        </p>
       </div>
 
       {loading ? (
@@ -62,7 +104,7 @@ export function Notifications() {
               <button
                 key={n.id}
                 type="button"
-                onClick={() => navigate(`/vehicle/${n.vehicleId}`)}
+                onClick={() => openNotification(n)}
                 className={`w-full text-left p-4 rounded-xl border transition ${
                   isHigh
                     ? 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15'
@@ -79,6 +121,14 @@ export function Notifications() {
                     {n.dueDate && (
                       <p className="text-[10px] text-zinc-600 mt-1">
                         Due: {new Date(n.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
+                    {n.created_at && (
+                      <p className="text-[10px] text-zinc-600 mt-1">
+                        {new Date(n.created_at).toLocaleString(undefined, {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
                       </p>
                     )}
                   </div>

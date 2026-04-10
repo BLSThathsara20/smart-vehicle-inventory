@@ -13,4 +13,5 @@ export const PERMISSIONS = {
   SETTINGS_VIEW: 'settings:view',
   ROLES_MANAGE: 'roles:manage',
   USERS_MANAGE: 'users:manage',
+  ANALYTICS_VIEW: 'analytics:view',
 }

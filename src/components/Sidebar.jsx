@@ -1,10 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const mainNavItems = [
   { to: '/app', icon: LayoutGrid, label: 'Overview', permission: 'search:view' },
   { to: '/app/inventory', icon: Car, label: 'Inventory', permission: 'inventory:view' },
+  { to: '/app/analytics', icon: BarChart3, label: 'Analytics', permission: 'analytics:view' },
+  { to: '/app/my-work', icon: ClipboardList, label: 'My work', permission: 'inventory:view' },
   { to: '/app/add', icon: PlusCircle, label: 'Add Vehicle', permission: 'inventory:add' },
 ]
 
@@ -14,6 +16,7 @@ const secondaryNavItems = [
   { to: '/app/space', icon: HardDrive, label: 'Storage & Space', permission: 'space:view' },
   { to: '/app/roles', icon: Shield, label: 'Roles & Permissions', permission: 'roles:manage' },
   { to: '/app/users', icon: UsersIcon, label: 'Users', permission: 'users:manage' },
+  { to: '/app/work-paths', icon: Route, label: 'Work paths', permission: 'workflows:manage' },
   { to: '/app/settings', icon: Settings, label: 'Settings', permission: 'settings:view' },
 ]
 

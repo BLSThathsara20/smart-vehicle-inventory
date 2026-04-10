@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import {
+  fetchVehicleById,
+  patchVehicleFields,
+  deleteVehicle,
+  fetchSimilarVehiclesPool,
+} from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
@@ -9,6 +14,7 @@ import { getSimilarVehicles } from '../lib/similarVehicles'
 import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy } from 'lucide-react'
 import { Footer } from '../components/Footer'
 import { ReservationWorkflow } from '../components/ReservationWorkflow'
+import { VehicleOpsWorkflow } from '../components/VehicleOpsWorkflow'
 import { ReserveModal } from '../components/ReserveModal'
 import { DETAIL_SECTIONS } from '../lib/vehicleDetailFields'
 
@@ -16,10 +22,11 @@ export function VehicleDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, hasPermission } = useAuth()
+  const { user, profile, hasPermission } = useAuth()
   const { addNotification } = useNotification()
   const canEdit = hasPermission('inventory:edit')
   const canDelete = hasPermission('inventory:delete')
+  const canManageWorkflows = hasPermission('workflows:manage')
   const [vehicle, setVehicle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -52,29 +59,9 @@ export function VehicleDetail() {
 
   async function fetchVehicle() {
     try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(`
-          *,
-          vehicle_images (
-            id,
-            storage_path,
-            sort_order
-          )
-        `)
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-
-      const images = (data?.vehicle_images || [])
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-
-      setVehicle({ ...data, images })
+      const data = await fetchVehicleById(id)
+      if (!data) throw new Error('Not found')
+      setVehicle(data)
     } catch (err) {
       addNotification(err.message || 'Vehicle not found', 'error')
       navigate(user ? '/app' : '/find')
@@ -102,8 +89,7 @@ export function VehicleDetail() {
     setGeneratingLink(true)
     try {
       const token = generatePickupToken()
-      const { error } = await supabase.from('vehicles').update({ pickup_token: token }).eq('id', vehicle.id)
-      if (error) throw error
+      await patchVehicleFields(vehicle.id, { pickup_token: token })
       addNotification('Customer link generated', 'success')
       fetchVehicle()
     } catch (err) {
@@ -127,8 +113,7 @@ export function VehicleDetail() {
   async function handleDelete() {
     if (!confirm('Delete this vehicle?')) return
     try {
-      const { error } = await supabase.from('vehicles').delete().eq('id', id)
-      if (error) throw error
+      await deleteVehicle(id)
       addNotification('Vehicle deleted', 'success')
       navigate('/app/inventory')
     } catch (err) {
@@ -141,24 +126,7 @@ export function VehicleDetail() {
     setSimilarLoading(true)
     setSimilarVehicles([])
     try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(`*, vehicle_images (id, storage_path, sort_order)`)
-        .eq('sold', false)
-        .eq('reserved', false)
-        .neq('id', id)
-        .limit(100)
-
-      if (error) throw error
-
-      const withUrls = (data || []).map((v) => {
-        const images = (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-        return { ...v, images }
-      })
-
+      const withUrls = await fetchSimilarVehiclesPool(id)
       const similar = getSimilarVehicles(vehicle, withUrls, 12)
       setSimilarVehicles(similar)
     } catch (err) {
@@ -308,6 +276,17 @@ export function VehicleDetail() {
               </div>
             </div>
           )}
+
+          <div className="mb-6">
+            <VehicleOpsWorkflow
+              vehicle={vehicle}
+              currentUid={user?.uid}
+              currentDisplayName={profile?.display_name || user?.displayName || user?.email || ''}
+              onUpdate={fetchVehicle}
+              canApply={canEdit && !vehicle.sold}
+              canManageWorkflows={canManageWorkflows}
+            />
+          </div>
 
           <div className={`rounded-2xl overflow-hidden mb-6 ${
             isSold ? 'bg-rose-950/20 border-2 border-rose-500/30' : isReserved ? 'bg-amber-950/20 border-2 border-amber-500/30' : 'bg-zinc-900/50 border border-zinc-800/60'

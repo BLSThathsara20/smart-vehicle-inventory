@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { supabase } from '../lib/supabase'
+import {
+  fetchBrandsAndModels,
+  vehicleCounts,
+  fetchRecentSold,
+  fetchVehiclesForList,
+  fetchVehiclesByPlateOrStock,
+} from '../lib/sanityData'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleCard } from '../components/VehicleCard'
 import { CameraCapture } from '../components/CameraCapture'
@@ -18,6 +24,7 @@ export function Search() {
   const [modelFilter, setModelFilter] = useState('')
   const [maxPriceInput, setMaxPriceInput] = useState('')
   const [models, setModels] = useState([])
+  const [modelsByBrandMap, setModelsByBrandMap] = useState({})
   const [brands, setBrands] = useState([])
   const [stats, setStats] = useState({ available: 0, reserved: 0, sold: 0 })
   const [modelCounts, setModelCounts] = useState({})
@@ -31,73 +38,43 @@ export function Search() {
   const isValidMaxPrice = maxPriceFilter != null && !isNaN(maxPriceFilter) && maxPriceFilter > 0
   const shouldSearch = query.trim() || brandFilter || modelFilter || isValidMaxPrice
 
-  // Fetch brands that exist in inventory (smart filter)
   useEffect(() => {
-    supabase
-      .from('vehicles')
-      .select('brand')
-      .not('brand', 'is', null)
-      .then(({ data }) => {
-        const b = [...new Set((data || []).map((r) => r.brand).filter(Boolean))].sort()
-        setBrands(b)
-      })
+    fetchBrandsAndModels().then(({ brands: b, modelsByBrand }) => {
+      setBrands(b)
+      setModelsByBrandMap(modelsByBrand)
+    })
   }, [])
 
-  // Fetch models when brand changes (only models that exist for that brand)
   useEffect(() => {
     if (!brandFilter) {
       setModels([])
       setModelFilter('')
       return
     }
-    supabase
-      .from('vehicles')
-      .select('model')
-      .ilike('brand', brandFilter)
-      .then(({ data }) => {
-        const m = [...new Set((data || []).map((r) => r.model).filter(Boolean))].sort()
-        setModels(m)
-        setModelFilter('')
-      })
-  }, [brandFilter])
+    setModels(modelsByBrandMap[brandFilter] || [])
+    setModelFilter('')
+  }, [brandFilter, modelsByBrandMap])
 
-  // Fetch recent sold vehicles (latest 8)
   useEffect(() => {
-    supabase
-      .from('vehicles')
-      .select('id, stock_id, brand, model, buyers_name, customer_name, selling_price, created_at')
-      .eq('sold', true)
-      .order('created_at', { ascending: false })
-      .limit(8)
-      .then(({ data, error }) => {
-        if (error) {
-          // Fallback: minimal columns (base schema only)
-          supabase
-            .from('vehicles')
-            .select('id, stock_id, brand, model, created_at')
-            .eq('sold', true)
-            .order('created_at', { ascending: false })
-            .limit(8)
-            .then(({ data: d }) => setRecentSales(d || []))
-          return
-        }
-        setRecentSales(data || [])
-      })
+    fetchRecentSold(8).then((rows) =>
+      setRecentSales(
+        (rows || []).map((v) => ({
+          id: v.id,
+          stock_id: v.stock_id,
+          brand: v.brand,
+          model: v.model,
+          buyers_name: v.buyers_name,
+          customer_name: v.customer_name,
+          selling_price: v.selling_price,
+          created_at: v.created_at,
+          updated_at: v.updated_at,
+        }))
+      )
+    )
   }, [])
 
-  // Fetch stats
   useEffect(() => {
-    Promise.all([
-      supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('sold', false).eq('reserved', false),
-      supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('reserved', true).neq('sold', true),
-      supabase.from('vehicles').select('id', { count: 'exact', head: true }).eq('sold', true),
-    ]).then(([a, r, s]) => {
-      setStats({
-        available: a.count ?? 0,
-        reserved: r.count ?? 0,
-        sold: s.count ?? 0,
-      })
-    })
+    vehicleCounts().then(setStats)
   }, [])
 
   useEffect(() => {
@@ -112,32 +89,13 @@ export function Search() {
   async function searchVehicles() {
     setLoading(true)
     try {
-      let qb = supabase
-        .from('vehicles')
-        .select(`*, vehicle_images (id, storage_path, sort_order)`)
-
-      if (query.trim()) {
-        qb = qb.or(
-          `stock_id.ilike.%${query.trim()}%,plate_no.ilike.%${query.trim()}%,brand.ilike.%${query.trim()}%,model.ilike.%${query.trim()}%,location.ilike.%${query.trim()}%`
-        )
-      }
-      if (brandFilter) qb = qb.ilike('brand', brandFilter)
-      if (modelFilter) qb = qb.ilike('model', modelFilter)
-      if (isValidMaxPrice) qb = qb.lte('selling_price', maxPriceFilter)
-
-      const { data, error } = await qb.limit(100)
-
-      if (error) throw error
-
-      const withUrls = (data || []).map((v) => {
-        const images = (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-        return { ...v, images }
+      const withUrls = await fetchVehiclesForList({
+        search: query.trim() || undefined,
+        brand: brandFilter || undefined,
+        model: modelFilter || undefined,
+        maxPrice: isValidMaxPrice ? maxPriceFilter : undefined,
+        limit: 100,
       })
-
-      // Compute model counts for display
       const counts = {}
       withUrls.forEach((v) => {
         const key = `${(v.brand || '').trim()}|${(v.model || '').trim()}`
@@ -158,22 +116,7 @@ export function Search() {
     setQuery(q)
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(`*, vehicle_images (id, storage_path, sort_order)`)
-        .or(`plate_no.ilike.%${q}%,stock_id.ilike.%${q}%`)
-        .limit(5)
-
-      if (error) throw error
-
-      const withUrls = (data || []).map((v) => {
-        const images = (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-        return { ...v, images }
-      })
-
+      const withUrls = await fetchVehiclesByPlateOrStock(q)
       const counts = {}
       withUrls.forEach((v) => {
         const key = `${(v.brand || '')}|${(v.model || '')}`
@@ -195,21 +138,8 @@ export function Search() {
   }
 
   const searchFn = async (q) => {
-    const { data, error } = await supabase
-      .from('vehicles')
-      .select(`*, vehicle_images (id, storage_path, sort_order)`)
-      .or(`plate_no.ilike.%${q}%,stock_id.ilike.%${q}%`)
-      .limit(5)
-    if (error) return { vehicles: [] }
-    return {
-      vehicles: (data || []).map((v) => ({
-        ...v,
-        images: (v.vehicle_images || []).map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        })),
-      })),
-    }
+    const vehicles = await fetchVehiclesByPlateOrStock(q)
+    return { vehicles }
   }
 
   const handleCameraCapture = (result) => {

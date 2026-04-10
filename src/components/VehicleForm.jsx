@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { fetchVehicleLocations, saveVehicle } from '../lib/sanityData'
+import { uploadImageToImgbb } from '../lib/imgbb'
 import { compressImages } from '../lib/imageCompress'
 import { useNotification } from '../context/NotificationContext'
 import { AccordionSection } from './AccordionSection'
@@ -19,6 +20,16 @@ const Y_N = ['y', 'n']
 const inputClass = 'w-full px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
 const labelClass = 'block text-sm font-medium text-zinc-400 mb-1'
 const selectClass = 'w-full px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500'
+
+/** Module-level so React does not remount inputs on every parent render (focus loss bug). */
+function VehicleField({ label, children }) {
+  return (
+    <div>
+      {label && <label className={labelClass}>{label}</label>}
+      {children}
+    </div>
+  )
+}
 
 function featuresToObject(arr) {
   return arr.reduce((acc, f) => {
@@ -129,10 +140,8 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
   const toggleSection = (key) => setOpenSections((s) => ({ ...s, [key]: !s[key] }))
 
   const fetchLocations = useCallback(async (query) => {
-    let q = supabase.from('vehicles').select('location').not('location', 'is', null)
-    if (query?.trim().length >= 2) q = q.ilike('location', `%${query.trim()}%`)
-    const { data } = await q.limit(15)
-    setLocationSuggestions([...new Set((data || []).map((r) => r.location).filter(Boolean))])
+    const list = await fetchVehicleLocations(query)
+    setLocationSuggestions(list)
   }, [])
 
   useEffect(() => {
@@ -273,36 +282,29 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
         pickup_token: reserved ? (vehicle?.pickup_token || newPickupToken) : null,
       }
 
-      let vehicleId = vehicle?.id
-      if (vehicleId) {
-        const { error } = await supabase.from('vehicles').update(payload).eq('id', vehicleId)
-        if (error) throw error
-      } else {
-        const { data, error } = await supabase.from('vehicles').insert(payload).select('id').single()
-        if (error) throw error
-        vehicleId = data.id
-      }
+      const newImageUrls =
+        imageFiles.length > 0
+          ? await Promise.all(imageFiles.map((file) => uploadImageToImgbb(file)))
+          : []
 
-      if (imagesToRemove.length > 0 && vehicleId) {
-        const toRemove = (vehicle?.images || []).filter((img) => imagesToRemove.includes(img.id))
-        for (const img of toRemove) {
-          await supabase.storage.from('vehicle-images').remove([img.storage_path])
-        }
-        await supabase.from('vehicle_images').delete().in('id', imagesToRemove)
-      }
+      const existingDoc = vehicle
+        ? {
+            images: (vehicle.images || []).map((i) => ({
+              _key: i.id,
+              id: i.id,
+              url: i.url,
+              sortOrder: i.sort_order,
+            })),
+          }
+        : null
 
-      if (imageFiles.length > 0) {
-        const existingCount = (vehicle?.images || []).length - imagesToRemove.length
-        const paths = await Promise.all(
-          imageFiles.map(async (file, i) => {
-            const path = `${vehicleId}/${Date.now()}-${i}.jpg`
-            const { error } = await supabase.storage.from('vehicle-images').upload(path, file, { upsert: true })
-            if (error) throw error
-            return { vehicle_id: vehicleId, storage_path: path, sort_order: existingCount + i }
-          })
-        )
-        await supabase.from('vehicle_images').insert(paths)
-      }
+      await saveVehicle({
+        vehicleId: vehicle?.id,
+        payload,
+        existingDoc,
+        newImageUrls,
+        removedImageKeys: new Set(imagesToRemove),
+      })
 
       addNotification(vehicle ? 'Vehicle updated' : 'Vehicle added', 'success')
       onSuccess?.()
@@ -317,28 +319,21 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
   const displayedExisting = existingImages.filter((img) => !imagesToRemove.includes(img.id))
   const totalImageCount = displayedExisting.length + imageFiles.length
 
-  const Field = ({ label, children }) => (
-    <div>
-      {label && <label className={labelClass}>{label}</label>}
-      {children}
-    </div>
-  )
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* 1. Core Identification */}
       <AccordionSection title="1. Core Identification" open={openSections.core} onToggle={() => toggleSection('core')} variant="core">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Stock ID *">
+          <VehicleField label="Stock ID *">
             <input type="text" value={form.stock_id} onChange={(e) => update('stock_id', e.target.value)} required className={inputClass} />
-          </Field>
-          <Field label="Plate No *">
+          </VehicleField>
+          <VehicleField label="Plate No *">
             <input type="text" value={form.plate_no} onChange={(e) => update('plate_no', e.target.value)} required className={inputClass} />
-          </Field>
-          <Field label="VIN">
+          </VehicleField>
+          <VehicleField label="VIN">
             <input type="text" value={form.vin} onChange={(e) => update('vin', e.target.value)} placeholder="Vehicle Identification Number" className={inputClass} />
-          </Field>
-          <Field label="Location">
+          </VehicleField>
+          <VehicleField label="Location">
             <div className="relative">
               <input
                 type="text"
@@ -359,57 +354,57 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
                 </div>
               )}
             </div>
-          </Field>
-          <Field label="Brand *">
+          </VehicleField>
+          <VehicleField label="Brand *">
             <select value={form.brand} onChange={(e) => update('brand', e.target.value)} required className={selectClass}>
               <option value="">Select brand</option>
               {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
-          </Field>
-          <Field label="Model *">
+          </VehicleField>
+          <VehicleField label="Model *">
             <input type="text" value={form.model} onChange={(e) => update('model', e.target.value)} placeholder="e.g. A3, 3 Series" required className={inputClass} />
-          </Field>
-          <Field label="Body Type">
+          </VehicleField>
+          <VehicleField label="Body Type">
             <select value={form.body} onChange={(e) => update('body', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {BODY_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
-          </Field>
-          <Field label="Color">
+          </VehicleField>
+          <VehicleField label="Color">
             <input type="text" value={form.color} onChange={(e) => update('color', e.target.value)} className={inputClass} />
-          </Field>
+          </VehicleField>
         </div>
-        <Field label="Details">
+        <VehicleField label="Details">
           <textarea value={form.details} onChange={(e) => update('details', e.target.value)} rows={3} className={inputClass} />
-        </Field>
+        </VehicleField>
       </AccordionSection>
 
       {/* 2. Technical Specs */}
       <AccordionSection title="2. Technical Specs" open={openSections.technical} onToggle={() => toggleSection('technical')} variant="technical">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Field label="Mileage (miles)">
+          <VehicleField label="Mileage (miles)">
             <input type="number" value={form.mileage} onChange={(e) => update('mileage', e.target.value)} placeholder="UK" className={inputClass} />
-          </Field>
-          <Field label="CC">
+          </VehicleField>
+          <VehicleField label="CC">
             <input type="number" value={form.cc} onChange={(e) => update('cc', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Model Year">
+          </VehicleField>
+          <VehicleField label="Model Year">
             <input type="number" value={form.model_year} onChange={(e) => update('model_year', e.target.value)} min="1900" max="2030" className={inputClass} />
-          </Field>
-          <Field label="Fuel Type">
+          </VehicleField>
+          <VehicleField label="Fuel Type">
             <select value={form.fuel_type} onChange={(e) => update('fuel_type', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {FUEL_TYPES.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
-          </Field>
-          <Field label="Gear">
+          </VehicleField>
+          <VehicleField label="Gear">
             <select value={form.gear} onChange={(e) => update('gear', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {GEAR_TYPES.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
-          </Field>
+          </VehicleField>
         </div>
-        <Field label="Car Features">
+        <VehicleField label="Car Features">
           <div className="space-y-2">
             {form.featuresList.map((val, i) => (
               <div key={i} className="flex gap-2">
@@ -423,7 +418,7 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
               </div>
             ))}
           </div>
-        </Field>
+        </VehicleField>
       </AccordionSection>
 
       {/* 3. Media & Photography */}
@@ -435,11 +430,11 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
           </label>
         </div>
         {form.photographed && (
-          <Field label="Photo Drive Link">
+          <VehicleField label="Photo Drive Link">
             <input type="url" value={form.photo_drive_link} onChange={(e) => update('photo_drive_link', e.target.value)} placeholder="Google Drive / Dropbox link" className={inputClass} />
-          </Field>
+          </VehicleField>
         )}
-        <Field label="Images (1-4)">
+        <VehicleField label="Images (1-4)">
           <div className="flex flex-wrap gap-2">
             {displayedExisting.map((img) => (
               <div key={img.id} className="relative w-20 h-20 rounded-lg overflow-hidden bg-zinc-700">
@@ -466,90 +461,90 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
               <button type="button" onClick={() => setImagesToRemove([])} className="text-amber-400 hover:text-amber-300">Undo</button>
             </p>
           )}
-        </Field>
+        </VehicleField>
       </AccordionSection>
 
       {/* 4. Listing & Advertising */}
       <AccordionSection title="4. Listing & Advertising" open={openSections.listing} onToggle={() => toggleSection('listing')} variant="listing">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Service Record">
+          <VehicleField label="Service Record">
             <select value={form.service_record} onChange={(e) => update('service_record', e.target.value)} className={selectClass}>
               {YES_NO.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="FB Listed">
+          </VehicleField>
+          <VehicleField label="FB Listed">
             <select value={form.fb_listed ? 'yes' : 'no'} onChange={(e) => update('fb_listed', e.target.value === 'yes')} className={selectClass}>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
-          </Field>
-          <Field label="Web Listed">
+          </VehicleField>
+          <VehicleField label="Web Listed">
             <select value={form.web_listed ? 'yes' : 'no'} onChange={(e) => update('web_listed', e.target.value === 'yes')} className={selectClass}>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
-          </Field>
+          </VehicleField>
           {form.web_listed && (
-            <Field label="Web URL">
+            <VehicleField label="Web URL">
               <input type="url" value={form.web_url} onChange={(e) => update('web_url', e.target.value)} className={inputClass} />
-            </Field>
+            </VehicleField>
           )}
-          <Field label="Autotrader Listed">
+          <VehicleField label="Autotrader Listed">
             <select value={form.autotrader_listed ? 'yes' : 'no'} onChange={(e) => update('autotrader_listed', e.target.value === 'yes')} className={selectClass}>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
-          </Field>
+          </VehicleField>
           {form.autotrader_listed && (
-            <Field label="Autotrader URL">
+            <VehicleField label="Autotrader URL">
               <input type="url" value={form.autotrader_url} onChange={(e) => update('autotrader_url', e.target.value)} className={inputClass} />
-            </Field>
+            </VehicleField>
           )}
         </div>
-        <Field label="ADS Details">
+        <VehicleField label="ADS Details">
           <textarea value={form.ads_details} onChange={(e) => update('ads_details', e.target.value)} rows={2} className={inputClass} />
-        </Field>
+        </VehicleField>
       </AccordionSection>
 
       {/* 5. Documentation */}
       <AccordionSection title="5. Documentation" open={openSections.documentation} onToggle={() => toggleSection('documentation')} variant="documentation">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Doc. Status">
+          <VehicleField label="Doc. Status">
             <select value={form.doc_status} onChange={(e) => update('doc_status', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {DOC_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-          </Field>
-          <Field label="Shipment No">
+          </VehicleField>
+          <VehicleField label="Shipment No">
             <input type="text" value={form.shipment_no} onChange={(e) => update('shipment_no', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Shipment Arrived Date">
+          </VehicleField>
+          <VehicleField label="Shipment Arrived Date">
             <input type="date" value={form.shipment_arrived_date} onChange={(e) => update('shipment_arrived_date', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Key No">
+          </VehicleField>
+          <VehicleField label="Key No">
             <input type="text" value={form.key_no} onChange={(e) => update('key_no', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="IVA Booked">
+          </VehicleField>
+          <VehicleField label="IVA Booked">
             <select value={form.iva_booked} onChange={(e) => update('iva_booked', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {Y_N.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="V5C">
+          </VehicleField>
+          <VehicleField label="V5C">
             <select value={form.v5c} onChange={(e) => update('v5c', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {Y_N.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
-          </Field>
-          <Field label="V5C Send Date">
+          </VehicleField>
+          <VehicleField label="V5C Send Date">
             <input type="date" value={form.v5c_send_date} onChange={(e) => update('v5c_send_date', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="V5C Received Date">
+          </VehicleField>
+          <VehicleField label="V5C Received Date">
             <input type="date" value={form.v5c_received_date} onChange={(e) => update('v5c_received_date', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="MOT Expiry Date">
+          </VehicleField>
+          <VehicleField label="MOT Expiry Date">
             <input type="date" value={form.mot_expiry_date} onChange={(e) => update('mot_expiry_date', e.target.value)} className={inputClass} />
-          </Field>
+          </VehicleField>
         </div>
         <div className="flex flex-wrap gap-4">
           {['mot_done', 'service_done', 'v55_registration_done'].map((key) => (
@@ -564,63 +559,63 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
       {/* 6. Sale & Reservation */}
       <AccordionSection title="6. Sale & Reservation" open={openSections.sale} onToggle={() => toggleSection('sale')} variant="sale">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Status">
+          <VehicleField label="Status">
             <select value={form.vehicle_status} onChange={(e) => update('vehicle_status', e.target.value)} className={selectClass}>
               {VEHICLE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-          </Field>
-          <Field label="Reserved Date">
+          </VehicleField>
+          <VehicleField label="Reserved Date">
             <input type="date" value={form.reserved_date} onChange={(e) => update('reserved_date', e.target.value)} className={inputClass} />
-          </Field>
+          </VehicleField>
           {form.vehicle_status === 'Reserved' && (
             <>
-              <Field label="Customer Name *">
+              <VehicleField label="Customer Name *">
                 <input type="text" value={form.customer_name} onChange={(e) => update('customer_name', e.target.value)} placeholder="Reserving customer" className={inputClass} required />
-              </Field>
-              <Field label="Customer Email *">
+              </VehicleField>
+              <VehicleField label="Customer Email *">
                 <input type="email" value={form.customer_email} onChange={(e) => update('customer_email', e.target.value)} placeholder="customer@example.com" className={inputClass} required />
-              </Field>
-              <Field label="Customer Phone *">
+              </VehicleField>
+              <VehicleField label="Customer Phone *">
                 <input type="tel" value={form.customer_phone} onChange={(e) => update('customer_phone', e.target.value)} placeholder="e.g. 07700 900000" className={inputClass} required />
-              </Field>
-              <Field label="Deposit Agreement URL">
+              </VehicleField>
+              <VehicleField label="Deposit Agreement URL">
                 <input type="url" value={form.deposit_agreement_url} onChange={(e) => update('deposit_agreement_url', e.target.value)} placeholder="Link to signed agreement" className={inputClass} />
-              </Field>
-              <Field label="CarPlay Included">
+              </VehicleField>
+              <VehicleField label="CarPlay Included">
                 <select value={form.carplay_included ? 'yes' : 'no'} onChange={(e) => update('carplay_included', e.target.value === 'yes')} className={selectClass}>
                   <option value="no">No</option>
                   <option value="yes">Yes</option>
                 </select>
-              </Field>
+              </VehicleField>
             </>
           )}
-          <Field label={form.vehicle_status === 'Reserved' ? 'Deposit Amount (£) *' : 'Deposit Amount (£)'}>
+          <VehicleField label={form.vehicle_status === 'Reserved' ? 'Deposit Amount (£) *' : 'Deposit Amount (£)'}>
             <input type="number" step="0.01" min="0" value={form.deposit_amount} onChange={(e) => update('deposit_amount', e.target.value)} placeholder={form.vehicle_status === 'Reserved' ? 'Required (0 if none)' : ''} className={inputClass} required={form.vehicle_status === 'Reserved'} />
-          </Field>
-          <Field label="Buyers Name">
+          </VehicleField>
+          <VehicleField label="Buyers Name">
             <input type="text" value={form.buyers_name} onChange={(e) => update('buyers_name', e.target.value)} className={inputClass} placeholder={form.vehicle_status === 'Reserved' ? 'Same as customer for reserved' : ''} />
-          </Field>
-          <Field label="Planned Collection Date">
+          </VehicleField>
+          <VehicleField label="Planned Collection Date">
             <input type="date" value={form.planned_collection_date} onChange={(e) => update('planned_collection_date', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Selling Price (£)">
+          </VehicleField>
+          <VehicleField label="Selling Price (£)">
             <input type="number" step="0.01" value={form.selling_price} onChange={(e) => update('selling_price', e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Warranty">
+          </VehicleField>
+          <VehicleField label="Warranty">
             <select value={form.warranty} onChange={(e) => update('warranty', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {WARRANTY_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
             </select>
-          </Field>
-          <Field label="ID Type">
+          </VehicleField>
+          <VehicleField label="ID Type">
             <input type="text" value={form.id_type} onChange={(e) => update('id_type', e.target.value)} placeholder="e.g. Passport, Driving Licence" className={inputClass} />
-          </Field>
-          <Field label="Wholesale / Retail">
+          </VehicleField>
+          <VehicleField label="Wholesale / Retail">
             <select value={form.wholesale_retail} onChange={(e) => update('wholesale_retail', e.target.value)} className={selectClass}>
               <option value="">Select</option>
               {WHOLESALE_RETAIL.map((w) => <option key={w} value={w}>{w}</option>)}
             </select>
-          </Field>
+          </VehicleField>
         </div>
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -643,13 +638,13 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
           </label>
         </div>
         {form.pending_issues && (
-          <Field label="Pending Issues Details">
+          <VehicleField label="Pending Issues Details">
             <textarea value={form.pending_issues_details} onChange={(e) => update('pending_issues_details', e.target.value)} rows={2} className={inputClass} />
-          </Field>
+          </VehicleField>
         )}
-        <Field label="Extra Parts">
+        <VehicleField label="Extra Parts">
           <textarea value={form.extra_parts} onChange={(e) => update('extra_parts', e.target.value)} rows={2} className={inputClass} />
-        </Field>
+        </VehicleField>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {['battery_replaced', 'dial_ordered', 'body_work_required', 'media_system', 'reverse_camera', 'front_camera', 'front_sensor', 'rear_sensor', 'spare_key'].map((key) => (
             <label key={key} className="flex items-center gap-2 cursor-pointer">

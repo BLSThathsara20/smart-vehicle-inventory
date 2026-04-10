@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import {
+	fetchBrandsAndModels,
+	fetchVehiclesPage,
+	fetchVehiclesForModelCounts,
+	fetchAllVehiclesFiltered,
+} from "../lib/sanityData";
 import { VehicleCard } from "../components/VehicleCard";
 import { useNotification } from "../context/NotificationContext";
+import { useAuth } from "../context/AuthContext";
 import {
 	Car,
 	Loader2,
@@ -85,21 +91,19 @@ export function VehicleList() {
 	const [statusFilter, setStatusFilter] = useState("");
 	const [maxPriceInput, setMaxPriceInput] = useState("");
 	const [models, setModels] = useState([]);
+	const [modelsByBrandMap, setModelsByBrandMap] = useState({});
 	const [modelCounts, setModelCounts] = useState({});
 	const [exporting, setExporting] = useState(false);
 	const { addNotification } = useNotification();
+	const { hasPermission } = useAuth();
+	const canExport = hasPermission("inventory:edit");
 
 	useEffect(() => {
 		async function fetchBrands() {
 			setBrandsLoading(true);
 			try {
-				const { data, error } = await supabase
-					.from("vehicles")
-					.select("brand")
-					.not("brand", "is", null);
-				if (error) throw error;
-				const brands = [...new Set((data || []).map((r) => r.brand).filter(Boolean))].sort();
-				setAvailableBrands(brands);
+				const { brands } = await fetchBrandsAndModels();
+				setAvailableBrands(brands || []);
 			} catch (err) {
 				addNotification(err.message || "Failed to load brands", "error");
 			} finally {
@@ -110,23 +114,22 @@ export function VehicleList() {
 	}, []);
 
 	useEffect(() => {
+		async function loadModelsMap() {
+			const { modelsByBrand } = await fetchBrandsAndModels();
+			setModelsByBrandMap(modelsByBrand || {});
+		}
+		loadModelsMap();
+	}, []);
+
+	useEffect(() => {
 		if (!brandFilter) {
 			setModels([]);
 			setModelFilter("");
 			return;
 		}
-		supabase
-			.from("vehicles")
-			.select("model")
-			.ilike("brand", brandFilter)
-			.then(({ data }) => {
-				const unique = [
-					...new Set((data || []).map((r) => r.model).filter(Boolean)),
-				].sort();
-				setModels(unique);
-				setModelFilter("");
-			});
-	}, [brandFilter]);
+		setModels(modelsByBrandMap[brandFilter] || []);
+		setModelFilter("");
+	}, [brandFilter, modelsByBrandMap]);
 
 	useEffect(() => {
 		fetchVehicles();
@@ -136,27 +139,22 @@ export function VehicleList() {
 		fetchModelCounts();
 	}, [searchQuery, brandFilter, modelFilter, statusFilter, maxPriceInput]);
 
+	function listFilters() {
+		const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
+		return {
+			status: statusFilter === "available" ? "available" : statusFilter === "sold" ? "sold" : statusFilter === "reserved" ? "reserved" : undefined,
+			search: searchQuery.trim() || undefined,
+			brand: brandFilter || undefined,
+			model: modelFilter || undefined,
+			maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+		};
+	}
+
 	async function fetchModelCounts() {
 		try {
-			let qb = supabase.from("vehicles").select("brand, model");
-			if (statusFilter === "available") qb = qb.eq("sold", false).eq("reserved", false);
-			if (statusFilter === "sold") qb = qb.eq("sold", true);
-			if (statusFilter === "reserved") qb = qb.eq("reserved", true).neq("sold", true);
-			if (searchQuery.trim()) {
-				qb = qb.or(
-					`stock_id.ilike.%${searchQuery.trim()}%,plate_no.ilike.%${searchQuery.trim()}%,brand.ilike.%${searchQuery.trim()}%,model.ilike.%${searchQuery.trim()}%,location.ilike.%${searchQuery.trim()}%`
-				);
-			}
-			if (brandFilter) qb = qb.ilike("brand", brandFilter);
-			if (modelFilter) qb = qb.ilike("model", modelFilter);
-			const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
-			if (maxPrice != null && !isNaN(maxPrice) && maxPrice > 0) qb = qb.lte("selling_price", maxPrice);
-			const { data } = await qb.limit(2000);
-			const counts = {};
-			(data || []).forEach((v) => {
-				const key = `${(v.brand || "").trim()}|${(v.model || "").trim()}`;
-				counts[key] = (counts[key] || 0) + 1;
-			});
+			const filters = listFilters();
+			if (!filters.status) delete filters.status;
+			const counts = await fetchVehiclesForModelCounts(filters);
 			setModelCounts(counts);
 		} catch {
 			setModelCounts({});
@@ -166,54 +164,12 @@ export function VehicleList() {
 	async function fetchVehicles() {
 		setLoading(true);
 		try {
-			let qb = supabase
-				.from("vehicles")
-				.select(
-					`
-          *,
-          vehicle_images (
-            id,
-            storage_path,
-            sort_order
-          )
-        `,
-					{ count: "exact" },
-				)
-				.order("created_at", { ascending: false });
-
-			if (statusFilter === "available")
-				qb = qb.eq("sold", false).eq("reserved", false);
-			if (statusFilter === "sold") qb = qb.eq("sold", true);
-			if (statusFilter === "reserved") qb = qb.eq("reserved", true).neq("sold", true);
-
-			if (searchQuery.trim()) {
-				qb = qb.or(
-					`stock_id.ilike.%${searchQuery.trim()}%,plate_no.ilike.%${searchQuery.trim()}%,brand.ilike.%${searchQuery.trim()}%,model.ilike.%${searchQuery.trim()}%,location.ilike.%${searchQuery.trim()}%`,
-				);
-			}
-			if (brandFilter) qb = qb.ilike("brand", brandFilter);
-			if (modelFilter) qb = qb.ilike("model", modelFilter);
-			const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
-			if (maxPrice != null && !isNaN(maxPrice) && maxPrice > 0) qb = qb.lte("selling_price", maxPrice);
-
+			const filters = listFilters();
+			if (!filters.status) delete filters.status;
 			const from = (page - 1) * PAGE_SIZE;
-			const to = from + PAGE_SIZE - 1;
-			const { data, error, count } = await qb.range(from, to);
-
-			if (error) throw error;
-
-			const withUrls = (data || []).map((v) => {
-				const images = (v.vehicle_images || []).map((img) => ({
-					...img,
-					url: supabase.storage
-						.from("vehicle-images")
-						.getPublicUrl(img.storage_path).data.publicUrl,
-				}));
-				return { ...v, images };
-			});
-
-			setVehicles(withUrls);
-			setTotalCount(count ?? 0);
+			const { items, total } = await fetchVehiclesPage(filters, from, PAGE_SIZE);
+			setVehicles(items);
+			setTotalCount(total ?? 0);
 		} catch (err) {
 			addNotification(err.message || "Failed to load vehicles", "error");
 		} finally {
@@ -222,28 +178,9 @@ export function VehicleList() {
 	}
 
 	async function fetchAllFiltered() {
-		let qb = supabase
-			.from("vehicles")
-			.select("*")
-			.order("created_at", { ascending: false });
-
-		if (statusFilter === "available") qb = qb.eq("sold", false).eq("reserved", false);
-		if (statusFilter === "sold") qb = qb.eq("sold", true);
-		if (statusFilter === "reserved") qb = qb.eq("reserved", true).neq("sold", true);
-
-		if (searchQuery.trim()) {
-			qb = qb.or(
-				`stock_id.ilike.%${searchQuery.trim()}%,plate_no.ilike.%${searchQuery.trim()}%,brand.ilike.%${searchQuery.trim()}%,model.ilike.%${searchQuery.trim()}%,location.ilike.%${searchQuery.trim()}%`,
-			);
-		}
-		if (brandFilter) qb = qb.ilike("brand", brandFilter);
-		if (modelFilter) qb = qb.ilike("model", modelFilter);
-		const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
-		if (maxPrice != null && !isNaN(maxPrice) && maxPrice > 0) qb = qb.lte("selling_price", maxPrice);
-
-		const { data, error } = await qb.limit(5000);
-		if (error) throw error;
-		return data || [];
+		const filters = listFilters();
+		if (!filters.status) delete filters.status;
+		return fetchAllVehiclesFiltered(filters);
 	}
 
 	function exportPDF() {
@@ -346,7 +283,7 @@ export function VehicleList() {
 						Vehicle Stock
 					</h1>
 					<p className="text-zinc-500 text-sm mt-1.5">
-						Browse and manage your fleet
+						{canExport ? "Browse and manage your fleet" : "Browse fleet (view only)"}
 					</p>
 				</div>
 				<button
@@ -434,7 +371,7 @@ export function VehicleList() {
 					</div>
 					<p className="text-zinc-300 font-semibold">No vehicles found</p>
 					<p className="text-zinc-500 text-sm mt-1.5">
-						Adjust filters or add a new vehicle
+						{canExport ? "Adjust filters or add a new vehicle" : "Adjust filters"}
 					</p>
 				</div>
 			) : (
@@ -508,7 +445,7 @@ export function VehicleList() {
 					>
 						<div className="flex justify-between items-center p-5 border-b border-zinc-700/80">
 							<h3 className="text-lg font-semibold text-white tracking-tight">
-								Filter & Export
+								{canExport ? "Filter & Export" : "Filters"}
 							</h3>
 							<button
 								type="button"
@@ -615,34 +552,36 @@ export function VehicleList() {
 								</button>
 							)}
 
-							<div className="pt-4 border-t border-zinc-700/80">
-								<p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
-									Export
-								</p>
-								<div className="flex gap-3">
-									<button
-										type="button"
-										onClick={exportPDF}
-										disabled={exporting}
-										className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white disabled:opacity-50 transition"
-									>
-										<FileDown className="w-5 h-5" />
-										PDF
-									</button>
-									<button
-										type="button"
-										onClick={exportExcel}
-										disabled={exporting}
-										className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white disabled:opacity-50 transition"
-									>
-										<FileSpreadsheet className="w-5 h-5" />
-										Excel
-									</button>
+							{canExport && (
+								<div className="pt-4 border-t border-zinc-700/80">
+									<p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
+										Export
+									</p>
+									<div className="flex gap-3">
+										<button
+											type="button"
+											onClick={exportPDF}
+											disabled={exporting}
+											className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white disabled:opacity-50 transition"
+										>
+											<FileDown className="w-5 h-5" />
+											PDF
+										</button>
+										<button
+											type="button"
+											onClick={exportExcel}
+											disabled={exporting}
+											className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white disabled:opacity-50 transition"
+										>
+											<FileSpreadsheet className="w-5 h-5" />
+											Excel
+										</button>
+									</div>
+									<p className="text-xs text-zinc-600 mt-2">
+										Exports all matching vehicles
+									</p>
 								</div>
-								<p className="text-xs text-zinc-600 mt-2">
-									Exports all matching vehicles
-								</p>
-							</div>
+							)}
 						</div>
 
 						<div className="p-5 border-t border-zinc-700/80">

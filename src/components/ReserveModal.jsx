@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { patchVehicleFields } from '../lib/sanityData'
 import { Lock, X } from 'lucide-react'
 
 const inputClass = 'w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
@@ -53,8 +53,7 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
         buyers_name: form.customer_name.trim(),
         pickup_token: pickupToken,
       }
-      const { error: err } = await supabase.from('vehicles').update(payload).eq('id', vehicle.id)
-      if (err) throw err
+      await patchVehicleFields(vehicle.id, payload)
       onSuccess?.()
       onClose?.()
     } catch (err) {

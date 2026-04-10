@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { fetchAllRoles, fetchAllPermissions, updateRolePermissions } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { Shield, ChevronDown, ChevronRight, Loader2, Check, Save } from 'lucide-react'
+import { Shield, ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react'
 
 export function Roles() {
   const { hasPermission } = useAuth()
@@ -23,22 +23,13 @@ export function Roles() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [rolesRes, permsRes, rpRes] = await Promise.all([
-        supabase.from('roles').select('*').order('name'),
-        supabase.from('permissions').select('*').order('category').order('sort_order'),
-        supabase.from('role_permissions').select('role_id, permission_id'),
-      ])
-      if (rolesRes.error) throw rolesRes.error
-      if (permsRes.error) throw permsRes.error
-      if (rpRes.error) throw rpRes.error
-
-      setRoles(rolesRes.data || [])
-      setPermissions(permsRes.data || [])
+      const [rolesData, permsData] = await Promise.all([fetchAllRoles(), fetchAllPermissions()])
+      setRoles(rolesData || [])
+      setPermissions(permsData || [])
 
       const map = {}
-      ;(rpRes.data || []).forEach(({ role_id, permission_id }) => {
-        if (!map[role_id]) map[role_id] = new Set()
-        map[role_id].add(permission_id)
+      ;(rolesData || []).forEach((r) => {
+        map[r.id] = new Set(r.permission_ids || [])
       })
       setRolePerms(map)
     } catch (err) {
@@ -76,12 +67,7 @@ export function Roles() {
         return
       }
       const permIds = [...(rolePerms[roleId] || [])]
-      await supabase.from('role_permissions').delete().eq('role_id', roleId)
-      if (permIds.length > 0) {
-        await supabase.from('role_permissions').insert(
-          permIds.map((permission_id) => ({ role_id: roleId, permission_id }))
-        )
-      }
+      await updateRolePermissions(roleId, permIds)
       addNotification('Permissions saved', 'success')
     } catch (err) {
       addNotification(err.message || 'Failed to save', 'error')
@@ -129,7 +115,7 @@ export function Roles() {
         {roles.map((role) => {
           const isExpanded = expandedRole === role.id
           const isSystem = role.is_system
-          const permCount = (rolePerms[role.id]?.size ?? 0)
+          const permCount = rolePerms[role.id]?.size ?? 0
 
           return (
             <div

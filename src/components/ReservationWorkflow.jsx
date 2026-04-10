@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+  fetchWorkflowUpdates,
+  insertWorkflowUpdate,
+  deleteWorkflowUpdate,
+  patchVehicleFields,
+} from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { RESERVATION_STEPS } from '../lib/reservationWorkflow'
@@ -28,7 +33,7 @@ const ICONS = {
 }
 
 export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { addNotification } = useNotification()
   const [updates, setUpdates] = useState({})
   const [loading, setLoading] = useState(true)
@@ -44,13 +49,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
   async function fetchUpdates() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('reservation_workflow_updates')
-        .select('*')
-        .eq('vehicle_id', vehicleId)
-        .order('updated_at', { ascending: false })
-
-      if (error) throw error
+      const data = await fetchWorkflowUpdates(vehicleId)
 
       const byStep = {}
       ;(data || []).forEach((u) => {
@@ -76,11 +75,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!canEdit || !updates.pdi?.id) return
     setUpdatingStep('pdi_undo')
     try {
-      const { error } = await supabase
-        .from('reservation_workflow_updates')
-        .delete()
-        .eq('id', updates.pdi.id)
-      if (error) throw error
+      await deleteWorkflowUpdate(updates.pdi.id)
       addNotification('PDI undone', 'success')
       fetchUpdates()
       onUpdate?.()
@@ -97,19 +92,17 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!step) return
     setUpdatingStep('pdi_approved')
     try {
-      const { data: profile } = await supabase.from('profiles').select('display_name, email').eq('user_id', user?.id).single()
-      const updatedByName = profile?.display_name || profile?.email || 'Unknown'
-      const { error } = await supabase.from('reservation_workflow_updates').insert({
+      const updatedByName = profile?.display_name || profile?.email || user?.email || 'Unknown'
+      await insertWorkflowUpdate({
         vehicle_id: vehicleId,
         step_key: step.key,
         step_label: step.label,
         status: 'done',
         comment: 'Manager approved PDI',
-        updated_by: user?.id,
+        updated_by: user?.uid || '',
         updated_by_name: updatedByName,
         device_info: getDeviceInfo(),
       })
-      if (error) throw error
       addNotification('PDI approved — visible to customer', 'success')
       fetchUpdates()
       onUpdate?.()
@@ -126,19 +119,17 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!readyStep) return
     setUpdatingStep('ready_to_pickup')
     try {
-      const { data: profile } = await supabase.from('profiles').select('display_name, email').eq('user_id', user?.id).single()
-      const updatedByName = profile?.display_name || profile?.email || 'Unknown'
-      const { error } = await supabase.from('reservation_workflow_updates').insert({
+      const updatedByName = profile?.display_name || profile?.email || user?.email || 'Unknown'
+      await insertWorkflowUpdate({
         vehicle_id: vehicleId,
         step_key: readyStep.key,
         step_label: readyStep.label,
         status: 'done',
         comment: 'Manager approved — ready for customer pickup',
-        updated_by: user?.id,
+        updated_by: user?.uid || '',
         updated_by_name: updatedByName,
         device_info: getDeviceInfo(),
       })
-      if (error) throw error
       addNotification('Manager approved — Ready to pickup', 'success')
       fetchUpdates()
       onUpdate?.()
@@ -153,11 +144,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!canEdit || !vehicleId) return
     setSavingDeliveryDate(true)
     try {
-      const { error } = await supabase
-        .from('vehicles')
-        .update({ planned_collection_date: date || null })
-        .eq('id', vehicleId)
-      if (error) throw error
+      await patchVehicleFields(vehicleId, { planned_collection_date: date || null })
       addNotification(date ? 'Delivery date saved' : 'Delivery date cleared', 'success')
       onUpdate?.()
     } catch (err) {
@@ -171,19 +158,17 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!canEdit) return
     setUpdatingStep(step.key)
     try {
-      const { data: profile } = await supabase.from('profiles').select('display_name, email').eq('user_id', user?.id).single()
-      const updatedByName = profile?.display_name || profile?.email || 'Unknown'
-      const { error } = await supabase.from('reservation_workflow_updates').insert({
+      const updatedByName = profile?.display_name || profile?.email || user?.email || 'Unknown'
+      await insertWorkflowUpdate({
         vehicle_id: vehicleId,
         step_key: step.key,
         step_label: step.label,
         status: 'done',
         comment: comment.trim() || null,
-        updated_by: user?.id,
+        updated_by: user?.uid || '',
         updated_by_name: updatedByName,
         device_info: getDeviceInfo(),
       })
-      if (error) throw error
       addNotification(`${step.label} marked complete`, 'success')
       setComment('')
       setActiveStep(null)

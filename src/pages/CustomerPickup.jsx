@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { fetchVehicleByPickupToken, fetchWorkflowUpdates } from '../lib/sanityData'
 import { CUSTOMER_VISIBLE_STEPS } from '../lib/reservationWorkflow'
 import { Lock, ClipboardCheck, FileCheck, Calendar, Package, CheckCircle, Loader2, AlertCircle, User, Mail, Phone, Sparkles, Car } from 'lucide-react'
 import { Footer } from '../components/Footer'
@@ -43,48 +43,24 @@ export function CustomerPickup() {
     setLoading(true)
     setNotFound(false)
     try {
-      const { data: vData, error: vErr } = await supabase
-        .from('vehicles')
-        .select(`
-          *,
-          vehicle_images (id, storage_path, sort_order)
-        `)
-        .eq('pickup_token', token)
-        .eq('reserved', true)
-        .eq('sold', false)
-        .single()
-
-      if (vErr || !vData) {
+      const vehicleData = await fetchVehicleByPickupToken(token)
+      if (!vehicleData) {
         setNotFound(true)
         setLoading(false)
         return
       }
-
-      const images = (vData.vehicle_images || [])
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((img) => ({
-          ...img,
-          url: supabase.storage.from('vehicle-images').getPublicUrl(img.storage_path).data.publicUrl,
-        }))
-
-      const vehicleData = { ...vData, images }
       setVehicle(vehicleData)
 
-      if (!vData.plate_no) {
+      if (!vehicleData.plate_no) {
         setPlateVerified(true)
       } else {
         const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY(token)) : null
-        if (cached && normalizePlate(cached) === normalizePlate(vData.plate_no)) {
+        if (cached && normalizePlate(cached) === normalizePlate(vehicleData.plate_no)) {
           setPlateVerified(true)
         }
       }
 
-      const { data: wData } = await supabase
-        .from('reservation_workflow_updates')
-        .select('step_key, updated_at')
-        .eq('vehicle_id', vData.id)
-        .order('updated_at', { ascending: false })
-
+      const wData = await fetchWorkflowUpdates(vehicleData.id)
       const byStep = {}
       ;(wData || []).forEach((u) => {
         if (!byStep[u.step_key]) byStep[u.step_key] = u

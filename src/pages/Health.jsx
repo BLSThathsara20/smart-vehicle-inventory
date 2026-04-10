@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { hasFirebaseConfig } from '../lib/firebase'
+import { hasSanityConfig } from '../lib/sanity'
+import { sanityPing } from '../lib/sanityData'
+import { hasImgbbConfig } from '../lib/imgbb'
 import { Activity, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
 const StatusBadge = ({ ok, label }) => (
@@ -15,42 +18,32 @@ const StatusBadge = ({ ok, label }) => (
 
 export function Health() {
   const [checks, setChecks] = useState({
-    env: false,
-    supabase: false,
-    supabaseError: null,
+    firebase: false,
+    sanity: false,
+    sanityError: null,
+    imgbb: false,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const run = async () => {
-      const hasUrl = !!import.meta.env.VITE_SUPABASE_URL
-      const hasKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY
-      const envOk = hasUrl && hasKey
-
-      let supabaseOk = false
-      let supabaseError = null
-
-      if (envOk) {
-        try {
-          const { error } = await supabase.from('vehicles').select('id').limit(1)
-          supabaseOk = !error
-          supabaseError = error?.message ?? null
-        } catch (err) {
-          supabaseError = err.message
-        }
+      const fb = hasFirebaseConfig()
+      const imgbb = hasImgbbConfig
+      let san = false
+      let sanityError = null
+      if (hasSanityConfig) {
+        const r = await sanityPing()
+        san = r.ok
+        sanityError = r.error
       }
-
-      setChecks({
-        env: envOk,
-        supabase: supabaseOk,
-        supabaseError,
-      })
+      setChecks({ firebase: fb, sanity: san, sanityError, imgbb })
       setLoading(false)
     }
     run()
   }, [])
 
-  const allOk = checks.env && checks.supabase
+  const envOk = checks.firebase && hasSanityConfig && checks.imgbb
+  const allOk = envOk && checks.sanity
 
   return (
     <div>
@@ -80,29 +73,13 @@ export function Health() {
 
           <div className="space-y-3 p-4 rounded-xl bg-slate-800 border border-slate-700">
             <h3 className="text-sm font-medium text-slate-400 mb-2">Checks</h3>
-            <StatusBadge ok={checks.env} label="Environment (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)" />
-            <StatusBadge ok={checks.supabase} label="Supabase connection" />
-            {checks.supabaseError && (
-              <p className="text-sm text-red-400 mt-2 pl-7">{checks.supabaseError}</p>
+            <StatusBadge ok={checks.firebase} label="Firebase Auth (VITE_FIREBASE_*)" />
+            <StatusBadge ok={hasSanityConfig} label="Sanity env (project, dataset, token)" />
+            <StatusBadge ok={checks.sanity} label="Sanity API (query)" />
+            {checks.sanityError && (
+              <p className="text-sm text-red-400 mt-2 pl-7">{checks.sanityError}</p>
             )}
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-800 border border-slate-700">
-            <h3 className="text-sm font-medium text-slate-400 mb-2">Environment</h3>
-            <div className="space-y-1 text-sm font-mono">
-              <p>
-                <span className="text-slate-500">URL:</span>{' '}
-                <span className="text-slate-300">
-                  {import.meta.env.VITE_SUPABASE_URL ? '✓ Set' : '✗ Missing'}
-                </span>
-              </p>
-              <p>
-                <span className="text-slate-500">Anon key:</span>{' '}
-                <span className="text-slate-300">
-                  {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✓ Set' : '✗ Missing'}
-                </span>
-              </p>
-            </div>
+            <StatusBadge ok={checks.imgbb} label="ImgBB (VITE_IMGBB_API_KEY)" />
           </div>
         </div>
       )}

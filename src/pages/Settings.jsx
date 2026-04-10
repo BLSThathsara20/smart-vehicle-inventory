@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { updatePassword } from 'firebase/auth'
+import { auth } from '../lib/firebase'
+import { updateUserProfileDoc } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { Settings as SettingsIcon, LogOut, User, Lock, Save, Loader2 } from 'lucide-react'
@@ -12,7 +14,6 @@ export function Settings() {
     setDisplayName(profile?.display_name ?? '')
   }, [profile?.display_name])
   const [savingProfile, setSavingProfile] = useState(false)
-  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
@@ -30,14 +31,8 @@ export function Settings() {
     e.preventDefault()
     setSavingProfile(true)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          display_name: displayName.trim() || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', user.id)
-      if (error) throw error
+      if (!profile?.id) throw new Error('No profile')
+      await updateUserProfileDoc(profile.id, { display_name: displayName.trim() || null })
       addNotification('Profile updated', 'success')
       refreshProfile()
     } catch (err) {
@@ -59,10 +54,9 @@ export function Settings() {
     }
     setSavingPassword(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword })
-      if (error) throw error
+      if (!auth?.currentUser) throw new Error('Not signed in')
+      await updatePassword(auth.currentUser, newPassword)
       addNotification('Password updated', 'success')
-      setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
