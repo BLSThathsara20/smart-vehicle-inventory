@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useState,
-} from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -27,7 +21,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [profileLoading, setProfileLoading] = useState(false)
   const configOk = hasFirebaseConfig() && hasSanityConfig
 
   useEffect(() => {
@@ -37,40 +30,24 @@ export function AuthProvider({ children }) {
     }
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        // Keep auth "busy" until Sanity bootstrap finishes so login doesn't flash idle.
         setLoading(true)
         try {
           await ensureBootstrap()
           await ensureUserProfileForFirebaseUser(u)
+          const p = await fetchProfileWithPermissions(u.uid)
+          setProfile(p)
         } catch {
           /* profile bootstrap best-effort */
+          setProfile(null)
         }
+      } else {
+        setProfile(null)
       }
       setUser(u)
       setLoading(false)
     })
     return () => unsub()
   }, [configOk])
-
-  useLayoutEffect(() => {
-    if (!configOk || !user?.uid) {
-      setProfile(null)
-      setProfileLoading(false)
-      return
-    }
-    setProfileLoading(true)
-    let cancelled = false
-    fetchProfileWithPermissions(user.uid)
-      .then((p) => {
-        if (!cancelled) setProfile(p)
-      })
-      .finally(() => {
-        if (!cancelled) setProfileLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [configOk, user?.uid])
 
   const signIn = async (email, password) => {
     if (!auth) throw new Error('Firebase not configured')
@@ -111,14 +88,12 @@ export function AuthProvider({ children }) {
     if (user?.uid) fetchProfileWithPermissions(user.uid).then(setProfile)
   }
 
-  const ready = loading || (user && profileLoading)
-
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
-        loading: ready,
+        loading,
         configOk,
         signIn,
         signOut: signOutUser,

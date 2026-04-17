@@ -1,6 +1,10 @@
 import { sanity } from './sanity'
 import { vehicleMeetsApplyWhen } from './workflowApplyRules'
 
+/** One successful bootstrap per page load — avoids re-running ~10+ Sanity writes on every auth callback. */
+let bootstrapPromise = null
+let bootstrapSucceeded = false
+
 /** Permission bundles for seeded / ensured built-in roles (single source of truth). */
 const PERMS_GUEST = ['perm-inventory-view']
 const PERMS_HELPER = ['perm-inventory-view', 'perm-search-view', 'perm-settings-view']
@@ -71,19 +75,21 @@ async function ensureExtendedBuiltinRoles() {
       permission_ids: PERMS_MARKETER,
     },
   ]
-  for (const d of defs) {
-    await sanity.createIfNotExists({
-      _id: d._id,
-      _type: 'role',
-      name: d.name,
-      description: d.description,
-      is_system: false,
-      permission_ids: d.permission_ids,
-    })
-  }
+  await Promise.all(
+    defs.map((d) =>
+      sanity.createIfNotExists({
+        _id: d._id,
+        _type: 'role',
+        name: d.name,
+        description: d.description,
+        is_system: false,
+        permission_ids: d.permission_ids,
+      })
+    )
+  )
 }
 
-export async function ensureBootstrap() {
+async function runEnsureBootstrap() {
   if (!sanity) return
   const count = await sanity.fetch('count(*[_type == "permission"])')
   if (count === 0) {
@@ -174,67 +180,78 @@ export async function ensureBootstrap() {
          },
        ]
 
-       for (const p of permissions) {
-         await sanity.createOrReplace({ _type: 'permission', ...p })
-       }
-       for (const r of roles) {
-         const { permission_ids, ...rest } = r
-         await sanity.createOrReplace({ _type: 'role', ...rest, permission_ids })
-       }
+       await Promise.all(permissions.map((p) => sanity.createOrReplace({ _type: 'permission', ...p })))
+       await Promise.all(
+         roles.map((r) => {
+           const { permission_ids, ...rest } = r
+           return sanity.createOrReplace({ _type: 'role', ...rest, permission_ids })
+         })
+       )
   }
 
-  await syncBuiltinGuestRole()
-  await ensureExtendedBuiltinRoles()
-  await ensureWorkflowsPermission()
-  await ensureAnalyticsPermission()
+  await Promise.all([syncBuiltinGuestRole(), ensureExtendedBuiltinRoles()])
+  await ensureAdminMigrationPermissions()
 }
 
-/** Allow existing datasets to gain workflows permission on super_admin / admin roles. */
-async function ensureWorkflowsPermission() {
+/**
+ * Ensures newer permission docs exist and super_admin / admin roles include them.
+ * Single pass per role avoids races from parallel patchers (workflows vs analytics).
+ */
+async function ensureAdminMigrationPermissions() {
   if (!sanity) return
-  await sanity.createIfNotExists({
-    _id: 'perm-workflows-manage',
-    _type: 'permission',
-    code: 'workflows:manage',
-    label: 'Manage work paths',
-    category: 'Admin',
-    sort_order: 32,
-  })
-  const pid = 'perm-workflows-manage'
+  const defs = [
+    {
+      _id: 'perm-workflows-manage',
+      _type: 'permission',
+      code: 'workflows:manage',
+      label: 'Manage work paths',
+      category: 'Admin',
+      sort_order: 32,
+    },
+    {
+      _id: 'perm-analytics-view',
+      _type: 'permission',
+      code: 'analytics:view',
+      label: 'View analytics',
+      category: 'Admin',
+      sort_order: 33,
+    },
+  ]
+  await Promise.all(defs.map((doc) => sanity.createIfNotExists(doc)))
+  const needIds = defs.map((d) => d._id)
   for (const rid of ['role-super-admin', 'role-admin']) {
     const role = await sanity.fetch(`*[_id == $id][0]{ permission_ids }`, { id: rid })
     const raw = role?.permission_ids
     const ids = Array.isArray(raw)
       ? raw.map((x) => (typeof x === 'string' ? x : x?._ref || x?.ref || String(x)))
       : []
-    if (!ids.includes(pid)) {
-      await sanity.patch(rid).set({ permission_ids: [...ids, pid] }).commit()
+    const merged = [...ids]
+    let changed = false
+    for (const pid of needIds) {
+      if (!merged.includes(pid)) {
+        merged.push(pid)
+        changed = true
+      }
+    }
+    if (changed) {
+      await sanity.patch(rid).set({ permission_ids: merged }).commit()
     }
   }
 }
 
-/** Analytics: default super_admin + admin; grant to other roles under Roles & permissions. */
-async function ensureAnalyticsPermission() {
+/** Idempotent dataset setup; safe to call from many places — runs Sanity work at most once per page load. */
+export async function ensureBootstrap() {
   if (!sanity) return
-  await sanity.createIfNotExists({
-    _id: 'perm-analytics-view',
-    _type: 'permission',
-    code: 'analytics:view',
-    label: 'View analytics',
-    category: 'Admin',
-    sort_order: 33,
-  })
-  const pid = 'perm-analytics-view'
-  for (const rid of ['role-super-admin', 'role-admin']) {
-    const role = await sanity.fetch(`*[_id == $id][0]{ permission_ids }`, { id: rid })
-    const raw = role?.permission_ids
-    const ids = Array.isArray(raw)
-      ? raw.map((x) => (typeof x === 'string' ? x : x?._ref || x?.ref || String(x)))
-      : []
-    if (!ids.includes(pid)) {
-      await sanity.patch(rid).set({ permission_ids: [...ids, pid] }).commit()
-    }
+  if (bootstrapSucceeded) return
+  if (!bootstrapPromise) {
+    bootstrapPromise = (async () => {
+      await runEnsureBootstrap()
+      bootstrapSucceeded = true
+    })().finally(() => {
+      bootstrapPromise = null
+    })
   }
+  await bootstrapPromise
 }
 
 export function sanityVehicleToApp(doc) {
