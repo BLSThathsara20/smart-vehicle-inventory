@@ -1,27 +1,50 @@
 # Deploy to GitHub Pages
 
-## 1. Add repository secrets
+## 1. Firebase: authorize the GitHub Pages domain (required for sign-in)
 
-In your repo: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+If you see **`auth/unauthorized-domain`** or a console message that the domain is not authorized for OAuth:
 
-Add these secrets (from your `.env` file):
+1. Open [Firebase Console](https://console.firebase.google.com/) → your project  
+2. **Build** → **Authentication** → **Settings** (gear) → **Authorized domains**  
+3. Click **Add domain**  
+4. Add: **`blsthathsara20.github.io`** (no `https://`, no path)
 
-| Secret name | Value |
-|-------------|-------|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
+Also add **`localhost`** if it is not already listed (local dev).
 
-## 2. Enable GitHub Pages
+Without this, **Google sign-in** and **email/password** flows that use the hosted auth handler will fail on the live site.
 
-1. Go to **Settings** → **Pages**
-2. Under **Build and deployment** → **Source**, select **GitHub Actions**
+## 2. Add repository secrets
 
-## 3. Deploy
+**Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-Every push to `main` will trigger a deploy. After the workflow completes:
+Names must match what the app and [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) expect (see [`.env.example`](.env.example)):
 
-- **Live URL:** `https://blsthathsara20.github.io/smart-vehicle-inventory/`
+| Secret name | Notes |
+|-------------|--------|
+| `VITE_FIREBASE_API_KEY` | Firebase web app config |
+| `VITE_FIREBASE_AUTH_DOMAIN` | |
+| `VITE_FIREBASE_PROJECT_ID` | |
+| `VITE_FIREBASE_STORAGE_BUCKET` | |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | |
+| `VITE_FIREBASE_APP_ID` | |
+| `VITE_SANITY_PROJECT_ID` | |
+| `VITE_SANITY_DATASET` | e.g. `production` |
+| `VITE_SANITY_API_VERSION` | optional; defaults in app if empty |
+| `VITE_SANITY_TOKEN` | Editor token (Sanity) |
+| `VITE_IMGBB_API_KEY` | Image uploads |
 
-## 4. First-time setup
+Optional / legacy: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (not used by the current frontend gate).
 
-If this is a new repo, the first push may need you to enable Pages. After the workflow runs once, check **Settings** → **Pages** for the URL.
+## 3. Enable GitHub Pages
+
+**Settings** → **Pages** → **Source:** **GitHub Actions**
+
+## 4. Deploy
+
+Push to `main` (or run **Actions** → **Deploy to GitHub Pages** → **Run workflow**).
+
+**Live URL:** `https://blsthathsara20.github.io/smart-vehicle-inventory/`
+
+## 5. After changing secrets
+
+Re-run the deploy workflow so Vite rebuilds with the new `VITE_*` values (they are inlined at build time).
