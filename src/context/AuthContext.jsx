@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from 'react'
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -31,6 +37,8 @@ export function AuthProvider({ children }) {
     }
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
+        // Keep auth "busy" until Sanity bootstrap finishes so login doesn't flash idle.
+        setLoading(true)
         try {
           await ensureBootstrap()
           await ensureUserProfileForFirebaseUser(u)
@@ -44,16 +52,24 @@ export function AuthProvider({ children }) {
     return () => unsub()
   }, [configOk])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!configOk || !user?.uid) {
       setProfile(null)
       setProfileLoading(false)
       return
     }
     setProfileLoading(true)
+    let cancelled = false
     fetchProfileWithPermissions(user.uid)
-      .then((p) => setProfile(p))
-      .finally(() => setProfileLoading(false))
+      .then((p) => {
+        if (!cancelled) setProfile(p)
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [configOk, user?.uid])
 
   const signIn = async (email, password) => {
