@@ -23,27 +23,9 @@ import { CustomerPickup } from './pages/CustomerPickup'
 import { Privacy } from './pages/Privacy'
 import { ResetPassword } from './pages/ResetPassword'
 import { RequirePermission } from './components/RequirePermission'
+import { AuthLoadingScreen } from './components/AuthLoadingScreen'
 import { hasFirebaseConfig } from './lib/firebase'
 import { hasSanityConfig } from './lib/sanity'
-
-/** Full-screen loading while Firebase + Sanity profile are settling after sign-in. */
-function AuthLoadingScreen({ subtitle }) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 px-6">
-      <div
-        className="h-12 w-12 rounded-full border-2 border-orange-500 border-t-transparent animate-spin mb-5"
-        aria-hidden
-      />
-      <p className="text-slate-100 text-center text-base font-semibold tracking-tight">
-        Finishing sign-in…
-      </p>
-      <p className="text-slate-400 text-center text-sm mt-2 max-w-sm leading-relaxed">
-        {subtitle ||
-          'Syncing your account with the workspace. This usually takes a few seconds.'}
-      </p>
-    </div>
-  )
-}
 
 function ConfigMissing() {
   return (
@@ -66,7 +48,10 @@ function ProtectedRoute({ children }) {
   if (!configOk) return <ConfigMissing />
   if (loading) {
     return (
-      <AuthLoadingScreen subtitle="Loading permissions and workspace data." />
+      <AuthLoadingScreen
+        title="Loading workspace…"
+        subtitle="Authenticating your session and loading permissions. You will be redirected when ready."
+      />
     )
   }
   if (!user) return <Navigate to="/login" replace />
@@ -85,7 +70,12 @@ function LoginRedirect({ children }) {
   const { user, loading, configOk } = useAuth()
   if (!hasFirebaseConfig() || !hasSanityConfig) return <ConfigMissing />
   if (loading) {
-    return <AuthLoadingScreen />
+    return (
+      <AuthLoadingScreen
+        title="Authenticating…"
+        subtitle="Signing you in and syncing your account with the workspace."
+      />
+    )
   }
   if (user) return <Navigate to="/app" replace />
   return children
@@ -95,7 +85,12 @@ function HomeRedirect() {
   const { user, loading } = useAuth()
   if (!hasFirebaseConfig() || !hasSanityConfig) return <ConfigMissing />
   if (loading) {
-    return <AuthLoadingScreen subtitle="Checking your session…" />
+    return (
+      <AuthLoadingScreen
+        title="Checking session…"
+        subtitle="Verifying whether you are already signed in."
+      />
+    )
   }
   return <Navigate to={user ? '/app' : '/find'} replace />
 }
