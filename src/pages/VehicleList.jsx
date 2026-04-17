@@ -167,9 +167,11 @@ export function VehicleList() {
 			const filters = listFilters();
 			if (!filters.status) delete filters.status;
 			const from = (page - 1) * PAGE_SIZE;
-			const { items, total } = await fetchVehiclesPage(filters, from, PAGE_SIZE);
+			const { items, total } = await fetchVehiclesPage(filters, from, PAGE_SIZE, {
+				includeTotal: page === 1,
+			});
 			setVehicles(items);
-			setTotalCount(total ?? 0);
+			if (typeof total === "number") setTotalCount(total);
 		} catch (err) {
 			addNotification(err.message || "Failed to load vehicles", "error");
 		} finally {

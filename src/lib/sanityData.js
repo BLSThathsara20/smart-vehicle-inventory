@@ -380,6 +380,14 @@ const vehicleProjection = `{
   "images": images
 }`
 
+/** Minimal fields + first image only — smaller payloads for public / paginated grids. */
+const vehiclePublicCardProjection = `{
+  _id,
+  stock_id, plate_no, brand, model, body, color, location,
+  selling_price, reserved, sold, photographed,
+  "images": images | order(coalesce(sortOrder, 0) asc)[0..0]{ _key, url, "sort_order": coalesce(sortOrder, 0) }
+}`
+
 export async function fetchVehicleById(id) {
   if (!sanity) return null
   const doc = await sanity.fetch(`*[_type == "vehicle" && _id == $id][0] ${vehicleProjection}`, { id })
@@ -552,13 +560,25 @@ export async function fetchVehiclesForList(opts = {}) {
   return (docs || []).map(sanityVehicleToApp)
 }
 
-export async function fetchVehiclesPage(filters, offset, pageSize) {
-  if (!sanity) return { items: [], total: 0 }
+/**
+ * @param {object} filters
+ * @param {number} offset
+ * @param {number} pageSize
+ * @param {{ includeTotal?: boolean, lightProjection?: boolean }} [options] — skip count on page 2+ for faster pagination; use lightProjection on public list.
+ */
+export async function fetchVehiclesPage(filters, offset, pageSize, options = {}) {
+  const includeTotal = options.includeTotal !== false
+  if (!sanity) return { items: [], total: includeTotal ? 0 : undefined }
+  const lightProjection = options.lightProjection === true
+  const proj = lightProjection ? vehiclePublicCardProjection : vehicleProjection
   const { filter, params } = buildVehicleFilter(filters)
-  const total = await sanity.fetch(`count(*[${filter}])`, params)
+  let total
+  if (includeTotal) {
+    total = await sanity.fetch(`count(*[${filter}])`, params)
+  }
   const end = offset + pageSize
   const docs = await sanity.fetch(
-    `*[${filter}] | order(_createdAt desc) [${offset}...${end}] ${vehicleProjection}`,
+    `*[${filter}] | order(_createdAt desc) [${offset}...${end}] ${proj}`,
     params
   )
   return { items: (docs || []).map(sanityVehicleToApp), total }
