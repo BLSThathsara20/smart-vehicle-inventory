@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { ASAHI_LOGO_URL, ASAHI_BRAND_NAME, ASAHI_PRODUCT_TITLE } from '../constants/branding'
 
 const mainNavItems = [
   { to: '/app', icon: LayoutGrid, label: 'Overview', permission: 'search:view' },
@@ -32,8 +33,15 @@ export function Sidebar() {
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:w-56 md:z-30 bg-zinc-900/95 border-r border-zinc-800/80">
       <div className="flex flex-col flex-1 pt-6 pb-4 overflow-y-auto">
         <div className="px-4 mb-8">
-          <h2 className="text-lg font-semibold text-white tracking-tight">Car Inventory</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Management System</p>
+          <img
+            src={ASAHI_LOGO_URL}
+            alt=""
+            className="h-9 w-auto max-w-[160px] object-contain object-left mb-3"
+            loading="lazy"
+          />
+          <p className="text-[11px] font-semibold text-amber-500/95 tracking-wide uppercase">{ASAHI_BRAND_NAME}</p>
+          <h2 className="text-base font-semibold text-white tracking-tight mt-1">{ASAHI_PRODUCT_TITLE}</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Management</p>
         </div>
 
         <nav className="flex-1 space-y-1 px-3">

@@ -42,6 +42,7 @@ export function VehicleDetail() {
   const [newPdfLabel, setNewPdfLabel] = useState('')
   const [newPdfUrl, setNewPdfUrl] = useState('')
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [summaryPdfLoading, setSummaryPdfLoading] = useState(false)
 
   useEffect(() => {
     fetchVehicle()
@@ -441,11 +442,22 @@ export function VehicleDetail() {
             <div className="p-4 space-y-3">
               <button
                 type="button"
-                onClick={() => downloadSingleVehiclePdf(vehicle)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-600 text-zinc-200 text-sm font-medium hover:border-amber-500/40 hover:text-white"
+                disabled={summaryPdfLoading}
+                onClick={async () => {
+                  setSummaryPdfLoading(true)
+                  try {
+                    await downloadSingleVehiclePdf(vehicle)
+                    addNotification('PDF downloaded', 'success')
+                  } catch (err) {
+                    addNotification(err?.message || 'Could not create PDF (check logo access)', 'error')
+                  } finally {
+                    setSummaryPdfLoading(false)
+                  }
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-sm font-medium hover:bg-amber-500/25 disabled:opacity-50"
               >
                 <FileText className="w-4 h-4 shrink-0" />
-                Download vehicle summary (PDF)
+                {summaryPdfLoading ? 'Preparing PDF…' : 'Download vehicle summary (PDF)'}
               </button>
               {(vehicle.pdf_attachments || []).length > 0 && (
                 <ul className="space-y-2">

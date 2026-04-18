@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { Car, Lock, Mail, ChevronDown, ChevronUp } from 'lucide-react'
+import { Lock, Mail, ChevronDown, ChevronUp } from 'lucide-react'
 import { Footer } from './Footer'
+import { ASAHI_LOGO_URL, ASAHI_BRAND_NAME, ASAHI_PRODUCT_TITLE } from '../constants/branding'
 
 function GoogleIcon({ className }) {
   return (
@@ -76,14 +77,18 @@ export function Login() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-900">
       <div className="w-full max-w-sm">
-        <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center">
-            <Car className="w-8 h-8 text-white" />
-          </div>
+        <div className="flex flex-col items-center mb-6">
+          <img
+            src={ASAHI_LOGO_URL}
+            alt=""
+            className="h-16 w-auto max-w-[220px] object-contain mb-3"
+            loading="eager"
+          />
+          <p className="text-orange-400 text-center text-xs font-semibold tracking-wide uppercase mb-1">
+            {ASAHI_BRAND_NAME}
+          </p>
+          <h1 className="text-2xl font-bold text-center text-white">{ASAHI_PRODUCT_TITLE}</h1>
         </div>
-        <h1 className="text-2xl font-bold text-center text-white mb-2">
-          Vehicle Inventory
-        </h1>
         <p className="text-slate-400 text-center text-sm mb-6">
           Sign in with Google — your profile is saved automatically. Or use email below.
         </p>
