@@ -961,7 +961,7 @@ function buildStepsSnapshotFromTemplate(template) {
 /**
  * @param {string} vehicleId
  * @param {string} templateId
- * @param {{ deadlineAt?: string|null, priority?: 'normal'|'urgent' }} [options]
+ * @param {{ deadlineAt?: string|null, priority?: 'normal'|'urgent', appliedByUid?: string, appliedByName?: string }} [options]
  */
 export async function applyWorkPathToVehicle(vehicleId, templateId, options = {}) {
   if (!sanity) throw new Error('Sanity not configured')
@@ -1014,6 +1014,8 @@ export async function applyWorkPathToVehicle(vehicleId, templateId, options = {}
     apply_when: gate,
     time_sessions: [],
     allow_step_overlap: template.allow_step_overlap === true,
+    applied_by_uid: options.appliedByUid || '',
+    applied_by_name: options.appliedByName || '',
   }
   list.push(newInst)
 

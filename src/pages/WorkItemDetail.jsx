@@ -15,7 +15,7 @@ const placeholder =
 export function WorkItemDetail() {
   const { vehicleId, instanceId } = useParams()
   const navigate = useNavigate()
-  const { user, profile, hasPermission } = useAuth()
+  const { user, profile, hasPermission, isSuperAdmin } = useAuth()
   const { addNotification } = useNotification()
   const canEdit = hasPermission('inventory:edit')
   const canManageWorkflows = hasPermission('workflows:manage')
@@ -133,6 +133,7 @@ export function WorkItemDetail() {
         currentDisplayName={profile?.display_name || user?.displayName || user?.email || ''}
         canApply={showApplyBlock}
         canManageWorkflows={canManageWorkflows}
+        isSuperAdminUser={isSuperAdmin()}
         showApplyBlock={showApplyBlock}
         onUpdate={load}
       />

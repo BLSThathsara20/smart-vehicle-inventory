@@ -180,6 +180,7 @@ export function WorkPathInstancePanel({
   currentDisplayName,
   canApply,
   canManageWorkflows,
+  isSuperAdminUser = false,
   showApplyBlock,
   onUpdate,
   /** Hide admin remove (e.g. work-only view) */
@@ -252,6 +253,14 @@ export function WorkPathInstancePanel({
   const sequentialStepKey = currentStep != null ? workflowInstanceStepKey(steps, idx) : null
   const completedMap = stepCompletionMap(inst.completed_steps)
   const canPostDiscussion = !!currentUid
+
+  const canRemoveWorkPath =
+    canApply &&
+    showApplyBlock &&
+    !hideRemove &&
+    (isSuperAdminUser ||
+      canManageWorkflows ||
+      (!!inst.applied_by_uid && inst.applied_by_uid === currentUid))
 
   async function handleRemoveInstance() {
     if (!vehicleId || !confirm('Remove this work path from the vehicle?')) return
@@ -391,7 +400,7 @@ export function WorkPathInstancePanel({
               {done ? 'Done' : active ? 'Active' : inst.status}
             </span>
           </div>
-          {canApply && showApplyBlock && !hideRemove && (
+          {canRemoveWorkPath && (
             <button
               type="button"
               disabled={busy}
@@ -402,6 +411,11 @@ export function WorkPathInstancePanel({
             </button>
           )}
         </div>
+        {inst.applied_by_name && (
+          <p className="text-[10px] text-zinc-500">
+            Applied by <span className="text-zinc-400">{inst.applied_by_name}</span>
+          </p>
+        )}
         {inst.apply_when && inst.apply_when !== 'always' && (
           <p className="text-[10px] text-zinc-500">
             Template gate: <span className="text-zinc-400">{applyWhenLabel(inst.apply_when)}</span>

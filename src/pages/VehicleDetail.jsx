@@ -6,12 +6,13 @@ import {
   deleteVehicle,
   fetchSimilarVehiclesPool,
 } from '../lib/sanityData'
+import { downloadSingleVehiclePdf } from '../lib/exportSingleVehiclePdf'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { VehicleCard } from '../components/VehicleCard'
 import { getSimilarVehicles } from '../lib/similarVehicles'
-import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy } from 'lucide-react'
+import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, FileText, Trash2, Plus } from 'lucide-react'
 import { Footer } from '../components/Footer'
 import { ReservationWorkflow } from '../components/ReservationWorkflow'
 import { VehicleOpsWorkflow } from '../components/VehicleOpsWorkflow'
@@ -22,11 +23,12 @@ export function VehicleDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, profile, hasPermission } = useAuth()
+  const { user, profile, hasPermission, isSuperAdmin } = useAuth()
   const { addNotification } = useNotification()
   const canEdit = hasPermission('inventory:edit')
   const canDelete = hasPermission('inventory:delete')
   const canManageWorkflows = hasPermission('workflows:manage')
+  const canManageRoles = hasPermission('roles:manage')
   const [vehicle, setVehicle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -36,6 +38,10 @@ export function VehicleDetail() {
   const [generatingLink, setGeneratingLink] = useState(false)
   const [reserveOpen, setReserveOpen] = useState(false)
   const [editForReservationDetails, setEditForReservationDetails] = useState(false)
+  const [pdfAddOpen, setPdfAddOpen] = useState(false)
+  const [newPdfLabel, setNewPdfLabel] = useState('')
+  const [newPdfUrl, setNewPdfUrl] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     fetchVehicle()
@@ -118,6 +124,57 @@ export function VehicleDetail() {
       navigate('/app/inventory')
     } catch (err) {
       addNotification(err.message || 'Delete failed', 'error')
+    }
+  }
+
+  function canDeletePdfAttachment(att) {
+    if (!user?.uid || !att) return false
+    return att.created_by_uid === user.uid || isSuperAdmin() || canManageRoles
+  }
+
+  async function addPdfAttachment(e) {
+    e.preventDefault()
+    const url = newPdfUrl.trim()
+    if (!url || !vehicle?.id || !user?.uid) {
+      addNotification('URL is required', 'error')
+      return
+    }
+    setPdfBusy(true)
+    try {
+      const row = {
+        _key: crypto.randomUUID().replace(/-/g, '').slice(0, 12),
+        url,
+        label: newPdfLabel.trim() || 'Document',
+        created_by_uid: user.uid,
+        created_at: new Date().toISOString(),
+      }
+      const list = [...(vehicle.pdf_attachments || []), row]
+      await patchVehicleFields(vehicle.id, { pdf_attachments: list })
+      addNotification('Document link saved', 'success')
+      setNewPdfLabel('')
+      setNewPdfUrl('')
+      setPdfAddOpen(false)
+      fetchVehicle()
+    } catch (err) {
+      addNotification(err.message || 'Could not save', 'error')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  async function removePdfAttachment(key) {
+    if (!vehicle?.id || !key) return
+    if (!confirm('Remove this document link?')) return
+    setPdfBusy(true)
+    try {
+      const list = (vehicle.pdf_attachments || []).filter((a) => a._key !== key)
+      await patchVehicleFields(vehicle.id, { pdf_attachments: list })
+      addNotification('Document removed', 'success')
+      fetchVehicle()
+    } catch (err) {
+      addNotification(err.message || 'Could not remove', 'error')
+    } finally {
+      setPdfBusy(false)
     }
   }
 
@@ -362,6 +419,105 @@ export function VehicleDetail() {
             </div>
           </div>
 
+          <div className="mb-8 rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
+            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-4 py-3 border-b border-zinc-800/60 bg-zinc-900/80 flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5 text-amber-500/90" aria-hidden />
+              Documents and PDF
+            </h3>
+            <div className="p-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => downloadSingleVehiclePdf(vehicle)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-600 text-zinc-200 text-sm font-medium hover:border-amber-500/40 hover:text-white"
+              >
+                <FileText className="w-4 h-4 shrink-0" />
+                Download vehicle summary (PDF)
+              </button>
+              {(vehicle.pdf_attachments || []).length > 0 && (
+                <ul className="space-y-2">
+                  {(vehicle.pdf_attachments || []).map((att) => (
+                    <li
+                      key={att._key || att.url}
+                      className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-2"
+                    >
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-amber-400 hover:text-amber-300 underline truncate flex-1 min-w-0"
+                      >
+                        {att.label || 'Document'}
+                      </a>
+                      {canDeletePdfAttachment(att) && (
+                        <button
+                          type="button"
+                          onClick={() => removePdfAttachment(att._key)}
+                          disabled={pdfBusy}
+                          className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                          title="Remove link"
+                          aria-label="Remove document link"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canEdit && (
+                <>
+                  {!pdfAddOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setPdfAddOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-zinc-600 text-sm text-zinc-400 hover:text-amber-400 hover:border-amber-500/40"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add hosted PDF or document link
+                    </button>
+                  ) : (
+                    <form onSubmit={addPdfAttachment} className="space-y-2 rounded-lg border border-zinc-700/60 p-3 bg-zinc-800/30">
+                      <input
+                        type="text"
+                        value={newPdfLabel}
+                        onChange={(e) => setNewPdfLabel(e.target.value)}
+                        placeholder="Label (e.g. Sales agreement)"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm"
+                      />
+                      <input
+                        type="url"
+                        required
+                        value={newPdfUrl}
+                        onChange={(e) => setNewPdfUrl(e.target.value)}
+                        placeholder="https://…"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="submit"
+                          disabled={pdfBusy}
+                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 text-sm font-medium disabled:opacity-50"
+                        >
+                          {pdfBusy ? 'Saving…' : 'Save link'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPdfAddOpen(false); setNewPdfLabel(''); setNewPdfUrl('') }}
+                          className="px-4 py-2 rounded-lg border border-zinc-600 text-zinc-400 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </>
+              )}
+              <p className="text-[10px] text-zinc-600 leading-relaxed">
+                Use links to files you host (Drive, Dropbox, etc.). Only the person who added a link, super admins, or users who manage roles can remove it.
+              </p>
+            </div>
+          </div>
+
           <div className="mb-8 space-y-6">
             {DETAIL_SECTIONS.map((section) => (
               <div key={section.title} className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
@@ -407,16 +563,20 @@ export function VehicleDetail() {
             <div className="mb-8">
               <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Features</h3>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(vehicle.features).map(([k, v]) => (
-                  <span
-                    key={k}
-                    className={`px-3 py-1.5 rounded-xl text-sm ${
-                      v ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/60'
-                    }`}
-                  >
-                    {k}: {String(v)}
-                  </span>
-                ))}
+                {Object.entries(vehicle.features).map(([k, v]) => {
+                  const label = typeof v === 'string' && v.trim() ? v.trim() : k.replace(/_/g, ' ')
+                  const on = v === true || (typeof v === 'string' && v.trim() !== '')
+                  return (
+                    <span
+                      key={k}
+                      className={`px-3 py-1.5 rounded-xl text-sm ${
+                        on ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/60'
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           )}

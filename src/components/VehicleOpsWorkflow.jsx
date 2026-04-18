@@ -11,6 +11,7 @@ import { getParticipantPalette } from '../lib/workflowParticipantColors'
 import { vehicleMeetsApplyWhen } from '../lib/workflowApplyRules'
 import { WorkPathInstancePanel } from './WorkPathInstancePanel'
 import { useNotification } from '../context/NotificationContext'
+import { useAuth } from '../context/AuthContext'
 import { Route, Loader2, ChevronRight, X, ExternalLink } from 'lucide-react'
 
 function formatDt(iso) {
@@ -49,6 +50,7 @@ export function VehicleOpsWorkflow({
   canManageWorkflows,
 }) {
   const { addNotification } = useNotification()
+  const { isSuperAdmin } = useAuth()
   const [templates, setTemplates] = useState([])
   const [templatesLoading, setTemplatesLoading] = useState(true)
   const [selectedTemplate, setSelectedTemplate] = useState('')
@@ -106,6 +108,8 @@ export function VehicleOpsWorkflow({
       await applyWorkPathToVehicle(vehicle.id, selectedTemplate, {
         deadlineAt,
         priority: priority === 'urgent' ? 'urgent' : 'normal',
+        appliedByUid: currentUid || '',
+        appliedByName: currentDisplayName || '',
       })
       addNotification('Work path applied', 'success')
       setSelectedTemplate('')
@@ -381,6 +385,7 @@ export function VehicleOpsWorkflow({
                       currentDisplayName={currentDisplayName}
                       canApply={canApply}
                       canManageWorkflows={canManageWorkflows}
+                      isSuperAdminUser={isSuperAdmin()}
                       showApplyBlock={showApplyBlock}
                       onUpdate={onUpdate}
                     />
@@ -394,6 +399,7 @@ export function VehicleOpsWorkflow({
                       currentDisplayName={currentDisplayName}
                       canApply={canApply}
                       canManageWorkflows={canManageWorkflows}
+                      isSuperAdminUser={isSuperAdmin()}
                       showApplyBlock={showApplyBlock}
                       onUpdate={onUpdate}
                     />

@@ -18,8 +18,13 @@ const YES_NO = ['yes', 'no']
 const Y_N = ['y', 'n']
 
 const inputClass = 'w-full px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
+/** Stock, plate, price, mileage, etc. */
+const inputHighlightClass =
+  'w-full px-4 py-2 rounded-lg bg-zinc-800 border-2 border-amber-500/55 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-400 focus:border-amber-400'
 const labelClass = 'block text-sm font-medium text-zinc-400 mb-1'
 const selectClass = 'w-full px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500'
+const selectHighlightClass =
+  'w-full px-4 py-2 rounded-lg bg-zinc-800 border-2 border-amber-500/55 text-white focus:ring-2 focus:ring-amber-400 focus:border-amber-400'
 
 /** Module-level so React does not remount inputs on every parent render (focus loss bug). */
 function VehicleField({ label, children }) {
@@ -31,17 +36,44 @@ function VehicleField({ label, children }) {
   )
 }
 
+/** Sanity requires object keys to match ^$?[a-zA-Z0-9_-]+$ — slugify; keep human label in the value. */
+function slugifyFeatureKey(raw, usedKeys) {
+  let base = String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  if (!base) base = 'feature'
+  let key = base
+  let n = 0
+  while (usedKeys.has(key)) {
+    n += 1
+    key = `${base}_${n}`
+  }
+  usedKeys.add(key)
+  return key
+}
+
 function featuresToObject(arr) {
+  const used = new Set()
   return arr.reduce((acc, f) => {
-    const key = String(f).trim()
-    if (key) acc[key] = true
+    const label = String(f).trim()
+    if (!label) return acc
+    const key = slugifyFeatureKey(label, used)
+    acc[key] = label
     return acc
   }, {})
 }
 
 function featuresToArray(obj) {
-  if (!obj || typeof obj !== 'object') return []
-  return Object.keys(obj).filter(Boolean)
+  if (!obj || typeof obj !== 'object') return ['']
+  const entries = Object.entries(obj).filter(([k]) => k)
+  if (entries.length === 0) return ['']
+  return entries.map(([k, v]) => {
+    if (typeof v === 'string' && v.trim()) return v.trim()
+    if (v === true) return k
+    return k
+  })
 }
 
 const defaultForm = (vehicle) => ({
@@ -325,10 +357,10 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
       <AccordionSection title="1. Core Identification" open={openSections.core} onToggle={() => toggleSection('core')} variant="core">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <VehicleField label="Stock ID *">
-            <input type="text" value={form.stock_id} onChange={(e) => update('stock_id', e.target.value)} required className={inputClass} />
+            <input type="text" value={form.stock_id} onChange={(e) => update('stock_id', e.target.value)} required className={inputHighlightClass} />
           </VehicleField>
           <VehicleField label="Plate No *">
-            <input type="text" value={form.plate_no} onChange={(e) => update('plate_no', e.target.value)} required className={inputClass} />
+            <input type="text" value={form.plate_no} onChange={(e) => update('plate_no', e.target.value)} required className={inputHighlightClass} />
           </VehicleField>
           <VehicleField label="VIN">
             <input type="text" value={form.vin} onChange={(e) => update('vin', e.target.value)} placeholder="Vehicle Identification Number" className={inputClass} />
@@ -356,13 +388,13 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
             </div>
           </VehicleField>
           <VehicleField label="Brand *">
-            <select value={form.brand} onChange={(e) => update('brand', e.target.value)} required className={selectClass}>
+            <select value={form.brand} onChange={(e) => update('brand', e.target.value)} required className={selectHighlightClass}>
               <option value="">Select brand</option>
               {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </VehicleField>
           <VehicleField label="Model *">
-            <input type="text" value={form.model} onChange={(e) => update('model', e.target.value)} placeholder="e.g. A3, 3 Series" required className={inputClass} />
+            <input type="text" value={form.model} onChange={(e) => update('model', e.target.value)} placeholder="e.g. A3, 3 Series" required className={inputHighlightClass} />
           </VehicleField>
           <VehicleField label="Body Type">
             <select value={form.body} onChange={(e) => update('body', e.target.value)} className={selectClass}>
@@ -383,7 +415,7 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
       <AccordionSection title="2. Technical Specs" open={openSections.technical} onToggle={() => toggleSection('technical')} variant="technical">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <VehicleField label="Mileage (miles)">
-            <input type="number" value={form.mileage} onChange={(e) => update('mileage', e.target.value)} placeholder="UK" className={inputClass} />
+            <input type="number" value={form.mileage} onChange={(e) => update('mileage', e.target.value)} placeholder="UK" className={inputHighlightClass} />
           </VehicleField>
           <VehicleField label="CC">
             <input type="number" value={form.cc} onChange={(e) => update('cc', e.target.value)} className={inputClass} />
@@ -405,6 +437,9 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
           </VehicleField>
         </div>
         <VehicleField label="Car Features">
+          <p className="text-xs text-zinc-500 mb-2">
+            Any wording is fine — spaces and punctuation are converted to safe IDs for the database.
+          </p>
           <div className="space-y-2">
             {form.featuresList.map((val, i) => (
               <div key={i} className="flex gap-2">
@@ -599,7 +634,7 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
             <input type="date" value={form.planned_collection_date} onChange={(e) => update('planned_collection_date', e.target.value)} className={inputClass} />
           </VehicleField>
           <VehicleField label="Selling Price (£)">
-            <input type="number" step="0.01" value={form.selling_price} onChange={(e) => update('selling_price', e.target.value)} className={inputClass} />
+            <input type="number" step="0.01" value={form.selling_price} onChange={(e) => update('selling_price', e.target.value)} className={inputHighlightClass} />
           </VehicleField>
           <VehicleField label="Warranty">
             <select value={form.warranty} onChange={(e) => update('warranty', e.target.value)} className={selectClass}>
