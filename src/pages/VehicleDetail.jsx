@@ -268,6 +268,20 @@ export function VehicleDetail() {
                           {vehicle.customer_phone && ` · ${vehicle.customer_phone}`}
                         </p>
                       )}
+                      {Array.isArray(vehicle.reservation_conditions) &&
+                        vehicle.reservation_conditions.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-amber-500/20">
+                            <p className="text-[10px] font-medium text-amber-400/80 uppercase tracking-wider mb-1.5">
+                              Conditions at reservation
+                            </p>
+                            <ul className="text-xs text-amber-400/95 space-y-1 list-disc list-inside">
+                              {vehicle.reservation_conditions.map((x, i) => {
+                                const t = typeof x === 'string' ? x : x?.text
+                                return t ? <li key={x?._key || i}>{t}</li> : null
+                              })}
+                            </ul>
+                          </div>
+                        )}
                       {canEdit && (
                         <button
                           type="button"
@@ -525,7 +539,7 @@ export function VehicleDetail() {
                   {section.title}
                 </h3>
                 <div className="grid grid-cols-2 gap-3 p-4">
-                  {section.fields.map(({ key, label, format, isUrl }) => {
+                  {section.fields.map(({ key, label, format, isUrl, colSpan }) => {
                     const value = vehicle[key]
                     const display = format(value)
                     const isEmpty = display === 'Not added'
@@ -534,7 +548,7 @@ export function VehicleDetail() {
                         key={key}
                         className={`p-3 rounded-lg border ${
                           isEmpty ? 'bg-zinc-800/30 border-zinc-700/50' : 'bg-zinc-800/20 border-zinc-700/60'
-                        }`}
+                        } ${colSpan === 2 ? 'col-span-2' : ''}`}
                       >
                         <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">{label}</p>
                         {isUrl && value ? (

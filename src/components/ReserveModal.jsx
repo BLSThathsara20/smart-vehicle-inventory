@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { patchVehicleFields } from '../lib/sanityData'
-import { Lock, X } from 'lucide-react'
+import { linesToReservationConditions } from '../lib/reservationConditions'
+import { Lock, X, Plus } from 'lucide-react'
 
 const inputClass = 'w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
 const labelClass = 'block text-sm font-medium text-zinc-400 mb-1'
-const selectClass = 'w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500'
+
+const MAX_CONDITIONS = 15
 
 export function ReserveModal({ vehicle, onClose, onSuccess }) {
   const [form, setForm] = useState({
@@ -15,11 +17,32 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
     deposit_agreement_url: '',
     carplay_included: false,
     reserved_date: new Date().toISOString().slice(0, 10),
+    conditionLines: [''],
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }))
+
+  const updateConditionLine = (idx, value) =>
+    setForm((f) => ({
+      ...f,
+      conditionLines: f.conditionLines.map((line, i) => (i === idx ? value : line)),
+    }))
+
+  const addConditionLine = () => {
+    setForm((f) => {
+      if (f.conditionLines.length >= MAX_CONDITIONS) return f
+      return { ...f, conditionLines: [...f.conditionLines, ''] }
+    })
+  }
+
+  const removeConditionLine = (idx) => {
+    setForm((f) => {
+      if (f.conditionLines.length <= 1) return { ...f, conditionLines: [''] }
+      return { ...f, conditionLines: f.conditionLines.filter((_, i) => i !== idx) }
+    })
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -39,6 +62,7 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
     setLoading(true)
     try {
       const pickupToken = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+      const reservation_conditions = linesToReservationConditions(form.conditionLines)
       const payload = {
         reserved: true,
         sold: false,
@@ -52,6 +76,7 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
         carplay_included: form.carplay_included,
         buyers_name: form.customer_name.trim(),
         pickup_token: pickupToken,
+        reservation_conditions,
       }
       await patchVehicleFields(vehicle.id, payload)
       onSuccess?.()
@@ -151,6 +176,45 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
               placeholder="Link to signed agreement (optional)"
               className={inputClass}
             />
+          </div>
+          <div>
+            <label className={labelClass}>Reservation conditions (optional)</label>
+            <p className="text-xs text-zinc-500 mb-2">
+              Note anything the customer should expect before handover — e.g. minor bodywork, parts on order.
+            </p>
+            <div className="space-y-2">
+              {form.conditionLines.map((line, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={line}
+                    onChange={(e) => updateConditionLine(i, e.target.value)}
+                    placeholder={`Condition ${i + 1}`}
+                    className={`flex-1 ${inputClass}`}
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    {form.conditionLines.length < MAX_CONDITIONS && i === form.conditionLines.length - 1 && (
+                      <button
+                        type="button"
+                        onClick={addConditionLine}
+                        className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950"
+                        aria-label="Add condition"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeConditionLine(i)}
+                      className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-300"
+                      aria-label="Remove condition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <div>
             <label className="flex items-center gap-2 cursor-pointer">

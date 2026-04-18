@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchVehicleLocations, saveVehicle } from '../lib/sanityData'
+import { reservationConditionsToLines, linesToReservationConditions } from '../lib/reservationConditions'
 import { uploadImageToImgbb } from '../lib/imgbb'
 import { compressImages } from '../lib/imageCompress'
 import { useNotification } from '../context/NotificationContext'
@@ -141,6 +142,7 @@ const defaultForm = (vehicle) => ({
   wholesale_retail: vehicle?.wholesale_retail ?? '',
   plate_received: vehicle?.plate_received ?? false,
   ready_pullout: vehicle?.ready_pullout ?? false,
+  reservation_condition_lines: reservationConditionsToLines(vehicle),
 })
 
 export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
@@ -213,6 +215,28 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
   const removeFeature = (idx) => {
     if (form.featuresList.length <= 1) return update('featuresList', [''])
     update('featuresList', form.featuresList.filter((_, i) => i !== idx))
+  }
+
+  const MAX_RESERVATION_CONDITIONS = 15
+  const addReservationCondition = () => {
+    if (form.reservation_condition_lines.length >= MAX_RESERVATION_CONDITIONS) {
+      return addNotification('Max 15 reservation conditions', 'info')
+    }
+    update('reservation_condition_lines', [...form.reservation_condition_lines, ''])
+  }
+  const updateReservationCondition = (idx, value) =>
+    update(
+      'reservation_condition_lines',
+      form.reservation_condition_lines.map((line, i) => (i === idx ? value : line))
+    )
+  const removeReservationCondition = (idx) => {
+    if (form.reservation_condition_lines.length <= 1) {
+      return update('reservation_condition_lines', [''])
+    }
+    update(
+      'reservation_condition_lines',
+      form.reservation_condition_lines.filter((_, i) => i !== idx)
+    )
   }
 
   const handleSubmit = async (e) => {
@@ -312,6 +336,11 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
         plate_received: form.plate_received,
         ready_pullout: form.ready_pullout,
         pickup_token: reserved ? (vehicle?.pickup_token || newPickupToken) : null,
+      }
+      if (reserved) {
+        payload.reservation_conditions = linesToReservationConditions(form.reservation_condition_lines)
+      } else if (!sold) {
+        payload.reservation_conditions = []
       }
 
       const newImageUrls =
@@ -615,6 +644,45 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
               </VehicleField>
               <VehicleField label="Deposit Agreement URL">
                 <input type="url" value={form.deposit_agreement_url} onChange={(e) => update('deposit_agreement_url', e.target.value)} placeholder="Link to signed agreement" className={inputClass} />
+              </VehicleField>
+              <VehicleField label="Reservation conditions">
+                <p className="text-xs text-zinc-500 mb-2">
+                  Note anything the customer should expect before handover (bodywork, parts pending, etc.).
+                </p>
+                <div className="space-y-2">
+                  {form.reservation_condition_lines.map((line, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={line}
+                        onChange={(e) => updateReservationCondition(i, e.target.value)}
+                        placeholder={`Condition ${i + 1}`}
+                        className={`flex-1 ${inputClass}`}
+                      />
+                      <div className="flex gap-1 shrink-0">
+                        {form.reservation_condition_lines.length < MAX_RESERVATION_CONDITIONS &&
+                          i === form.reservation_condition_lines.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={addReservationCondition}
+                              className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white"
+                              aria-label="Add condition"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          )}
+                        <button
+                          type="button"
+                          onClick={() => removeReservationCondition(i)}
+                          className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-400"
+                          aria-label="Remove condition"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </VehicleField>
               <VehicleField label="CarPlay Included">
                 <select value={form.carplay_included ? 'yes' : 'no'} onChange={(e) => update('carplay_included', e.target.value === 'yes')} className={selectClass}>

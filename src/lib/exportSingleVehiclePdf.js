@@ -37,6 +37,12 @@ export function downloadSingleVehiclePdf(vehicle) {
   y = addLine(doc, 'Mileage', vehicle.mileage != null ? `${Number(vehicle.mileage).toLocaleString()} miles` : '', y)
   y = addLine(doc, 'Selling price', vehicle.selling_price != null && vehicle.selling_price !== '' ? `£${Number(vehicle.selling_price).toLocaleString()}` : '', y)
   y = addLine(doc, 'Status', vehicle.sold ? 'Sold' : vehicle.reserved ? 'Reserved' : 'Available', y)
+  if (Array.isArray(vehicle.reservation_conditions) && vehicle.reservation_conditions.length > 0) {
+    const parts = vehicle.reservation_conditions
+      .map((x) => (typeof x === 'string' ? x : x?.text))
+      .filter(Boolean)
+    if (parts.length) y = addLine(doc, 'Reservation conditions', parts.map((p, i) => `${i + 1}. ${p}`).join('; '), y)
+  }
   y = addLine(doc, 'Location', vehicle.location, y)
   if (vehicle.details) y = addLine(doc, 'Details', vehicle.details, y)
 

@@ -1,3 +1,5 @@
+import { formatReservationConditionsList } from './reservationConditions'
+
 /**
  * All vehicle detail fields for the detail view.
  * Each shows label and formats value. Empty values display as "Not added".
@@ -46,6 +48,12 @@ export const DETAIL_SECTIONS = [
       { key: 'warranty', label: 'Warranty period', format: (v) => v || 'Not added' },
       { key: 'buyers_name', label: "Buyer's name", format: (v) => v || 'Not added' },
       { key: 'reserved_date', label: 'Reserved date', format: (v) => (v ? new Date(v).toLocaleDateString() : 'Not added') },
+      {
+        key: 'reservation_conditions',
+        label: 'Reservation conditions',
+        format: (v) => formatReservationConditionsList(v),
+        colSpan: 2,
+      },
       { key: 'planned_collection_date', label: 'Planned collection', format: (v) => (v ? new Date(v).toLocaleDateString() : 'Not added') },
       { key: 'id_type', label: 'ID type', format: (v) => v || 'Not added' },
     ],
