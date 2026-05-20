@@ -1,5 +1,9 @@
 import { sanity } from "./sanity";
 import { vehicleMeetsApplyWhen } from "./workflowApplyRules";
+import {
+	validateWorkPathDeadlineVsPlannedCollection,
+	validateWorkPathDeadlineNotInPast,
+} from "./workPathDeadlineRules.js";
 import { deserializePdiFromStorage, serializePdiForStorage } from "./pdiInspectionModel.js";
 import {
 	verificationMatches,
@@ -2047,11 +2051,20 @@ export async function applyWorkPathToVehicle(
 	const priority = options.priority === "urgent" ? "urgent" : "normal";
 
 	const v = await sanity.fetch(
-		`*[_type == "vehicle" && _id == $id][0]{ ops_workflow, ops_workflows, sold, reserved }`,
+		`*[_type == "vehicle" && _id == $id][0]{ ops_workflow, ops_workflows, sold, reserved, planned_collection_date }`,
 		{
 			id: vehicleId,
 		},
 	);
+
+	const dlOk = validateWorkPathDeadlineVsPlannedCollection(
+		deadlineAt,
+		v?.planned_collection_date,
+	);
+	if (!dlOk.ok) throw new Error(dlOk.message);
+
+	const pastOk = validateWorkPathDeadlineNotInPast(deadlineAt);
+	if (!pastOk.ok) throw new Error(pastOk.message);
 
 	const gate = normalizeWorkPathApplyWhen(template.apply_when);
 	const allow = vehicleMeetsApplyWhen(

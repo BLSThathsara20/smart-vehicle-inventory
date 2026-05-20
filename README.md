@@ -75,7 +75,7 @@ When a vehicle is **reserved**, the app stores a checklist on the Sanity `vehicl
 
 Optional env: **`VITE_PDI_BRAND_LINE`** — overrides the PDF header branding (see `.env.example`).
 
-Prep **work paths** (sidebar *Work paths*) remain separate from PDI; only one ops work path can be attached per vehicle today, whereas PDI is always stored alongside the vehicle reservation.
+Prep **work paths** (sidebar *Work paths*) remain separate from PDI; only one ops work path can be attached per vehicle today. If the vehicle has a **planned collection date**, the app requires a prep-path **deadline on or before** that day (and not in the past) when applying the path — enforced in the UI and in Sanity writes.
 
 ### Prep work path template in Sanity
 

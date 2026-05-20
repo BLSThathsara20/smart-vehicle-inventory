@@ -13,6 +13,11 @@ import { getParticipantPalette } from '../lib/workflowParticipantColors'
 import { vehicleMeetsApplyWhen } from '../lib/workflowApplyRules'
 import { WorkPathInstancePanel } from './WorkPathInstancePanel'
 import { useNotification } from '../context/NotificationContext'
+import {
+  validateWorkPathDeadlineVsPlannedCollection,
+  validateWorkPathDeadlineNotInPast,
+  coerceToLocalYmd,
+} from '../lib/workPathDeadlineRules'
 import { Route, Loader2, ChevronRight, X, ExternalLink } from 'lucide-react'
 
 function formatDt(iso) {
@@ -145,13 +150,26 @@ export function VehicleOpsWorkflow({
         }
       }
     }
+    let deadlineAt = null
+    if (deadlineLocal) {
+      const d = new Date(deadlineLocal)
+      if (!Number.isNaN(d.getTime())) deadlineAt = d.toISOString()
+    }
+    const vDeadline = validateWorkPathDeadlineVsPlannedCollection(
+      deadlineAt,
+      vehicle?.planned_collection_date,
+    )
+    if (!vDeadline.ok) {
+      addNotification(vDeadline.message, 'error')
+      return
+    }
+    const vPast = validateWorkPathDeadlineNotInPast(deadlineAt)
+    if (!vPast.ok) {
+      addNotification(vPast.message, 'error')
+      return
+    }
     setBusy(true)
     try {
-      let deadlineAt = null
-      if (deadlineLocal) {
-        const d = new Date(deadlineLocal)
-        if (!Number.isNaN(d.getTime())) deadlineAt = d.toISOString()
-      }
       await applyWorkPathToVehicle(vehicle.id, selectedTemplate, {
         deadlineAt,
         priority: priority === 'urgent' ? 'urgent' : 'normal',
@@ -170,6 +188,22 @@ export function VehicleOpsWorkflow({
       setBusy(false)
     }
   }
+
+  const collectionYmd = coerceToLocalYmd(vehicle?.planned_collection_date)
+  const collectionHint =
+    collectionYmd &&
+    (() => {
+      try {
+        return new Date(`${collectionYmd}T12:00:00`).toLocaleDateString(undefined, {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+      } catch {
+        return collectionYmd
+      }
+    })()
 
   const showApplyBlock = canApply && !vehicle?.sold
 
@@ -268,6 +302,17 @@ export function VehicleOpsWorkflow({
                   onChange={(e) => setDeadlineLocal(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-white text-sm"
                 />
+                {collectionHint ? (
+                  <p className="text-[11px] text-sky-400/85 mt-1.5 leading-snug">
+                    Planned collection: <span className="font-medium text-sky-300">{collectionHint}</span> — deadline
+                    must be on or before this day (and in the future).
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-zinc-600 mt-1.5 leading-snug">
+                    Add a <span className="text-zinc-500">planned collection date</span> on the vehicle to enforce
+                    deadline vs handover.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">Priority</label>
