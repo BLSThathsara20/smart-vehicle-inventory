@@ -41,6 +41,7 @@ export function Login() {
 	const [googleLoading, setGoogleLoading] = useState(false);
 	const [showEmailForm, setShowEmailForm] = useState(false);
 	const navigate = useNavigate();
+	const { signIn, signUp, signInWithGoogle } = useAuth();
 	const { addNotification } = useNotification();
 
 	const handleGoogle = async () => {
