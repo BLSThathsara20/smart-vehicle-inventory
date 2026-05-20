@@ -117,7 +117,8 @@ export function PublicPullouts() {
             Public viewer
           </span>
           <p className="mt-2">
-            Vehicles listed here are reserved with a planned collection date. Preparation work paths show
+            Vehicles listed here are reserved (not sold). Those with a planned collection date are sorted first;
+            others stay visible until you add a date on the vehicle or reservation workflow. Preparation work paths show
             progress only (titles and statuses). Pricing, customer contacts, and other private reservation
             fields are not shown.
           </p>
@@ -135,7 +136,7 @@ export function PublicPullouts() {
 
         {!loading && !error && rows.length === 0 && (
           <p className="text-zinc-500 text-center py-12">
-            No vehicles are currently scheduled with a planned collection date.
+            No reserved vehicles are on the pullout list right now.
           </p>
         )}
 

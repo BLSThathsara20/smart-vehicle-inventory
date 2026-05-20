@@ -846,7 +846,8 @@ export async function fetchVehiclePublicById(id) {
 }
 
 /**
- * Scheduled collections (pullouts): reserved, not sold, with a planned collection date.
+ * Scheduled collections (pullouts): reserved, not sold.
+ * Planned collection date is optional — vehicles without a date appear after dated rows (sorted last).
  * Read-only projection for public listings — excludes customer/contact, pricing, pickup tokens,
  * reservation dates, buyers, viewing bookings, etc.
  */
@@ -855,8 +856,8 @@ export async function fetchVehiclesPublicPullouts() {
 	await ensureBootstrap();
 	const lim = 300;
 	const docs = await sanity.fetch(
-		`*[_type == "vehicle" && reserved == true && sold != true && defined(planned_collection_date)]
-			| order(planned_collection_date asc) [0...${lim}]{
+		`*[_type == "vehicle" && reserved == true && sold != true]
+			| order(coalesce(planned_collection_date, "9999-12-31") asc) [0...${lim}]{
 			_id,
 			stock_id,
 			brand,

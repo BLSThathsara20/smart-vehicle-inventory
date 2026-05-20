@@ -90,7 +90,7 @@ export function buildPublicPulloutsSchedulePdf(vehicles) {
   doc.setFont(undefined, 'normal')
   doc.setFontSize(9)
   doc.text(
-    `Listing reserved vehicles with a planned collection date. No customer details. Generated ${fmtDateTime(now.toISOString())}`,
+    `Reserved vehicles (collection date when set; undated rows listed last). No customer details. Generated ${fmtDateTime(now.toISOString())}`,
     margin,
     y,
     { maxWidth: 180 },
@@ -113,7 +113,7 @@ export function buildPublicPulloutsSchedulePdf(vehicles) {
     body:
       summaryBody.length > 0
         ? summaryBody
-        : [['—', 'No scheduled pullouts', '—', '—', '—', '—']],
+        : [['—', 'No vehicles on pullout list', '—', '—', '—', '—']],
     margin: { left: margin, right: margin },
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [245, 158, 11], textColor: [24, 24, 27] },
