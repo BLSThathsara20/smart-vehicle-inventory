@@ -22,6 +22,7 @@ import {
 	FileSpreadsheet,
 	PlusCircle,
 	CircleDashed,
+	Archive,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -138,6 +139,8 @@ export function VehicleList() {
 		setModelFilter("");
 	}, [brandFilter, modelsByBrandMap]);
 
+	const soldArchiveMode = statusFilter === "sold";
+
 	useEffect(() => {
 		fetchVehicles();
 	}, [page, searchQuery, brandFilter, modelFilter, statusFilter, pendingPlateFilter, maxPriceInput]);
@@ -148,13 +151,23 @@ export function VehicleList() {
 
 	function listFilters() {
 		const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
+		if (soldArchiveMode) {
+			return {
+				status: "sold",
+				search: searchQuery.trim() || undefined,
+				brand: brandFilter || undefined,
+				model: modelFilter || undefined,
+				maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+				pendingPlateOnly: pendingPlateFilter ? true : undefined,
+			};
+		}
 		let status;
 		if (statusFilter === "available") status = "available";
-		else if (statusFilter === "sold") status = "sold";
-		else if (statusFilter === "reserved") status = "reserved";
 		else if (statusFilter === "newly_arrived") status = "newly_arrived";
+		else if (statusFilter === "reserved") status = "reserved";
 		else status = undefined;
-		return {
+
+		const out = {
 			status,
 			search: searchQuery.trim() || undefined,
 			brand: brandFilter || undefined,
@@ -162,6 +175,11 @@ export function VehicleList() {
 			maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
 			pendingPlateOnly: pendingPlateFilter ? true : undefined,
 		};
+
+		if (!status) {
+			out.sold = false;
+		}
+		return out;
 	}
 
 	async function fetchModelCounts() {
@@ -177,7 +195,11 @@ export function VehicleList() {
 
 	async function fetchVehicles() {
 		setLoading(true);
-		setInventoryLoadMessage(`Fetching vehicles (page ${page}, filters applied)…`);
+		setInventoryLoadMessage(
+			soldArchiveMode
+				? `Fetching sold vehicles (page ${page})…`
+				: `Fetching vehicles (page ${page}, filters applied)…`,
+		);
 		try {
 			const filters = listFilters();
 			if (!filters.status) delete filters.status;
@@ -276,6 +298,11 @@ export function VehicleList() {
 		pendingPlateFilter ||
 		maxPriceInput.trim();
 
+	function toggleSoldOnlyInventory() {
+		setStatusFilter((prev) => (prev === "sold" ? "" : "sold"));
+		setPage(1);
+	}
+
 	const applyFilters = () => {
 		setPage(1);
 		setFilterOpen(false);
@@ -308,6 +335,11 @@ export function VehicleList() {
 					</h1>
 					<p className="text-zinc-500 text-sm mt-1.5">
 						{canExport ? "Browse and manage your fleet" : "Browse fleet (view only)"}
+						{soldArchiveMode ? (
+							<span className="block text-emerald-400/95 text-[13px] mt-2 font-medium">
+								Sold archive · only vehicles marked sold (hidden from normal stock view)
+							</span>
+						) : null}
 					</p>
 				</div>
 				<div className="flex items-start gap-2 shrink-0">
@@ -421,6 +453,22 @@ export function VehicleList() {
 					<CircleDashed className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
 					Pending plate
 				</button>
+				<button
+					type="button"
+					onClick={toggleSoldOnlyInventory}
+					className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 border ${
+						soldArchiveMode
+							? "bg-emerald-500/15 border-emerald-500/45 text-emerald-300 shadow-sm shadow-emerald-500/10"
+							: "bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/60"
+					}`}
+					title={
+						soldArchiveMode ? "Leave sold archive (return to active stock)" : "Show sold vehicles only"
+					}
+					aria-pressed={soldArchiveMode}
+				>
+					<Archive className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
+					Sold only
+				</button>
 				{brandsLoading ? (
 					<div className="flex items-center gap-2 px-4 py-2.5 text-zinc-500 text-sm">
 						<Loader2 className="w-4 h-4 animate-spin" />
@@ -455,7 +503,11 @@ export function VehicleList() {
 					</div>
 					<p className="text-zinc-300 font-semibold">No vehicles found</p>
 					<p className="text-zinc-500 text-sm mt-1.5">
-						{canExport ? "Adjust filters or add a new vehicle" : "Adjust filters"}
+						{soldArchiveMode
+							? "No sold vehicles match these filters · clear search or switch back to active stock"
+							: canExport
+								? "Adjust filters or add a new vehicle"
+								: "Adjust filters"}
 					</p>
 				</div>
 			) : (
