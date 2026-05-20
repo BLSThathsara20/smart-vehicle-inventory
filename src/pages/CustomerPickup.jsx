@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import {
-  fetchVehicleByPickupToken,
-  fetchWorkflowUpdates,
-  cancelCustomerReservationByPickupToken,
-} from '../lib/sanityData'
+import { fetchVehicleByPickupToken, fetchWorkflowUpdates } from '../lib/sanityData'
 import {
   verificationMatches,
-  pickupNeedsPlateOrStockVerification,
   pickupVerifiedStorageKey,
 } from '../lib/pickupVerification'
 import { CUSTOMER_VISIBLE_STEPS } from '../lib/reservationWorkflow'
@@ -24,8 +19,6 @@ import {
   Phone,
   Sparkles,
   Car,
-  Loader2,
-  X,
 } from 'lucide-react'
 import { Footer } from '../components/Footer'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
@@ -50,12 +43,6 @@ export function CustomerPickup() {
   const [plateInput, setPlateInput] = useState('')
   const [plateError, setPlateError] = useState('')
   const [pickupLoadMessage, setPickupLoadMessage] = useState('Looking up your vehicle…')
-  const [reservationCancelled, setReservationCancelled] = useState(false)
-  const [cancelModalOpen, setCancelModalOpen] = useState(false)
-  const [cancelBusy, setCancelBusy] = useState(false)
-  const [cancelError, setCancelError] = useState('')
-  const [cancelCredInput, setCancelCredInput] = useState('')
-
   useEffect(() => {
     if (!token) {
       setNotFound(true)
@@ -114,38 +101,6 @@ export function CustomerPickup() {
 
   const isReadyToPickup = !!workflow.ready_to_pickup
 
-  function openCancelModal() {
-    const cached =
-      typeof localStorage !== 'undefined' ? localStorage.getItem(pickupVerifiedStorageKey(token)) : ''
-    setCancelCredInput(cached || '')
-    setCancelError('')
-    setCancelModalOpen(true)
-  }
-
-  async function confirmCancelReservation() {
-    if (!token || !vehicle) return
-    setCancelBusy(true)
-    setCancelError('')
-    try {
-      const needs = pickupNeedsPlateOrStockVerification(vehicle)
-      const cred = needs ? cancelCredInput.trim() : ''
-      if (needs && !cred) {
-        setCancelError('Enter your plate number or stock ID to confirm cancellation')
-        return
-      }
-      await cancelCustomerReservationByPickupToken(token, cred)
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(pickupVerifiedStorageKey(token))
-      }
-      setCancelModalOpen(false)
-      setReservationCancelled(true)
-    } catch (e) {
-      setCancelError(e.message || 'Could not cancel reservation')
-    } finally {
-      setCancelBusy(false)
-    }
-  }
-
   function handlePlateSubmit(e) {
     e.preventDefault()
     setPlateError('')
@@ -173,26 +128,6 @@ export function CustomerPickup() {
     )
   }
 
-  if (reservationCancelled) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-white px-4 flex flex-col items-center justify-center pb-16">
-        <CheckCircle className="w-16 h-16 text-emerald-500/90 mb-4" aria-hidden />
-        <h1 className="text-xl font-semibold text-white text-center">Reservation cancelled</h1>
-        <p className="text-zinc-400 text-sm mt-3 text-center max-w-sm leading-relaxed">
-          Your hold on this vehicle has been removed. The dealer may offer it to other buyers. If you cancelled by
-          mistake, contact them as soon as you can.
-        </p>
-        <Link
-          to="/find"
-          className="mt-8 inline-flex items-center justify-center px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm transition"
-        >
-          Browse stock
-        </Link>
-        <Footer />
-      </div>
-    )
-  }
-
   if (notFound || !vehicle) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-white px-4">
@@ -216,76 +151,11 @@ export function CustomerPickup() {
     ((vehicle.plate_no && String(vehicle.plate_no).trim() !== '') ||
       (vehicle.stock_id != null && String(vehicle.stock_id).trim() !== ''))
 
-  const canShowCancelReservation =
+  const showReservedWaitingBanner =
     plateVerified && vehicle?.reserved && !vehicle?.sold && !showPlateGate
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white relative">
-      {cancelModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cancel-reservation-title"
-        >
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-600/80 bg-zinc-900 p-5 shadow-xl">
-            <div className="flex justify-between items-start gap-2 mb-3">
-              <h2 id="cancel-reservation-title" className="text-lg font-semibold text-white pr-2">
-                Cancel reservation?
-              </h2>
-              <button
-                type="button"
-                onClick={() => !cancelBusy && setCancelModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-sm text-zinc-400 leading-relaxed">
-              This removes your reservation and customer details from this vehicle. Your pickup link will stop working.
-              {isReadyToPickup ? (
-                <span className="block mt-2 text-amber-400/90">
-                  The dealer may have already prepared your car — speak to them first if you are unsure.
-                </span>
-              ) : null}
-            </p>
-            {pickupNeedsPlateOrStockVerification(vehicle) ? (
-              <div className="mt-4">
-                <label className="block text-[10px] text-zinc-500 uppercase mb-1">Confirm plate or stock ID</label>
-                <input
-                  type="text"
-                  value={cancelCredInput}
-                  onChange={(e) => { setCancelCredInput(e.target.value); setCancelError('') }}
-                  placeholder="Same as when you opened this page"
-                  autoComplete="off"
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-white text-sm"
-                />
-              </div>
-            ) : null}
-            {cancelError ? <p className="text-sm text-red-400 mt-3">{cancelError}</p> : null}
-            <div className="flex gap-2 mt-5">
-              <button
-                type="button"
-                disabled={cancelBusy}
-                onClick={() => setCancelModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-600 text-zinc-300 text-sm font-medium hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Keep reservation
-              </button>
-              <button
-                type="button"
-                disabled={cancelBusy}
-                onClick={confirmCancelReservation}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-              >
-                {cancelBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Cancel reservation
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Plate verification gate - blur overlay until correct plate entered */}
       {showPlateGate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md">
@@ -457,19 +327,44 @@ export function CustomerPickup() {
           </div>
         </div>
 
-        {canShowCancelReservation ? (
-          <div className="mt-6 rounded-2xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-            <p className="text-sm text-zinc-400 mb-3">
-              Need to release this vehicle? You can cancel your reservation yourself. The dealer will see it as available
-              again (unless a prep workflow is still open on their side).
-            </p>
-            <button
-              type="button"
-              onClick={openCancelModal}
-              className="w-full py-2.5 rounded-xl border border-zinc-600 text-zinc-300 text-sm font-medium hover:bg-zinc-800/80 hover:border-zinc-500 transition"
-            >
-              Cancel my reservation
-            </button>
+        {showReservedWaitingBanner ? (
+          <div className="mt-6 relative rounded-3xl overflow-hidden border border-amber-500/25 shadow-lg shadow-amber-500/[0.07] bg-zinc-900/70">
+            <div className="absolute inset-x-0 top-0 h-1 pickup-wait-shimmer rounded-t-3xl" aria-hidden />
+            <div className="relative flex flex-col items-center px-5 pt-8 pb-8 text-center">
+              <div className="relative mb-6 flex h-[5.75rem] w-[5.75rem] items-center justify-center" aria-hidden>
+                <span
+                  className="absolute inset-0 rounded-full bg-amber-400/25 pickup-wait-ring"
+                  style={{ animationDelay: '0ms' }}
+                />
+                <span
+                  className="absolute inset-2 rounded-full border-2 border-amber-400/35 pickup-wait-ring"
+                  style={{ animationDelay: '0.55s' }}
+                />
+                <span
+                  className="absolute inset-[10px] rounded-full border border-amber-400/20 pickup-wait-ring"
+                  style={{ animationDelay: '1.05s' }}
+                />
+                <Lock className="relative z-[1] w-11 h-11 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.45)]" />
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-500/95">
+                Reserved for you
+              </p>
+              <h3 className="mt-3 text-xl font-bold text-white tracking-tight leading-snug px-2">
+                Your reservation is secured
+              </h3>
+              <p className="mt-2 text-sm text-zinc-400 max-w-[20rem] leading-relaxed px-2">
+                This vehicle is allocated to your order. Hang tight — the team continues delivery prep and quality checks so
+                collection goes smoothly when it&apos;s your turn.
+              </p>
+              <div className="mt-5 flex gap-2 justify-center" aria-hidden>
+                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s]" />
+                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s] [animation-delay:0.18s]" />
+                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s] [animation-delay:0.36s]" />
+              </div>
+              <p className="mt-6 text-[11px] text-zinc-500 max-w-[18rem] leading-relaxed">
+                Need changes? Speak to your sales contact — they can update timing or paperwork for you.
+              </p>
+            </div>
           </div>
         ) : null}
 

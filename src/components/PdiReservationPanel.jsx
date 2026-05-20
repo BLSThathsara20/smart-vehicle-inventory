@@ -170,7 +170,22 @@ export function PdiReservationPanel({ vehicle, user, profile, canEdit, canViewIn
   }
 
   function handleExportPdf() {
-    downloadVehiclePdiPdf(vehicle, state, `pdi-${vehicle?.stock_id || vehicle?.plate_no || vehicle?.id || 'vehicle'}`)
+    if (!isPdiFinalized(state)) {
+      addNotification(
+        'Complete the PDI first (click Complete PDI after the checklist). Then you can export the PDF.',
+        'info',
+      )
+      return
+    }
+    try {
+      downloadVehiclePdiPdf(
+        vehicle,
+        state,
+        `pdi-${vehicle?.stock_id || vehicle?.plate_no || vehicle?.id || 'vehicle'}`,
+      )
+    } catch (e) {
+      addNotification(e?.message || 'Could not export PDI PDF', 'error')
+    }
   }
 
   /** When reserved but Sanity has no checklist row yet — offer reset from stock data */
@@ -246,7 +261,12 @@ export function PdiReservationPanel({ vehicle, user, profile, canEdit, canViewIn
                 <button
                   type="button"
                   onClick={handleExportPdf}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm hover:bg-zinc-700 transition"
+                  title={done ? 'Download PDI checklist PDF' : 'Complete PDI first to export'}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition ${
+                    done
+                      ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                      : 'bg-zinc-900/80 border-zinc-700/60 text-zinc-500 hover:bg-zinc-800/70 cursor-not-allowed opacity-[0.72]'
+                  }`}
                 >
                   <Download className="w-4 h-4" />
                   Export PDI PDF

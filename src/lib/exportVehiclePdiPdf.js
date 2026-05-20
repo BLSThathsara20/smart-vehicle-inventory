@@ -8,6 +8,7 @@ import {
   PDI_CHECKS_COL2,
   PDI_MECHANIC_CHECKS,
   normalizePdiInspection,
+  isPdiFinalized,
 } from './pdiInspectionModel.js'
 
 function yn(v) {
@@ -168,6 +169,9 @@ export function buildVehiclePdiPdf(vehicle = {}, inspection) {
 }
 
 export function downloadVehiclePdiPdf(vehicle, inspection, filenameBase = 'pdi') {
+  if (!isPdiFinalized(inspection)) {
+    throw new Error('PDI must be completed before exporting the PDF.')
+  }
   const doc = buildVehiclePdiPdf(vehicle, inspection)
   const safe = String(filenameBase).replace(/[^\w.-]+/g, '_')
   doc.save(`${safe}.pdf`)
