@@ -74,6 +74,93 @@ function checklistSummary(step) {
   return `${done}/${subs.length}`
 }
 
+function truncateMiddle(str, max) {
+  const s = String(str ?? '')
+  if (s.length <= max) return s
+  const half = Math.floor((max - 1) / 2)
+  return `${s.slice(0, half)}…${s.slice(s.length - (max - half - 1))}`
+}
+
+/** Checkbox-style mark — ASCII so built-in PDF fonts render reliably */
+function subtaskDoneMark(done) {
+  return done ? '[x]' : '[ ]'
+}
+
+/**
+ * @param {{ kind?: string, body?: string, image_url?: string, image?: { asset?: { url?: string } } }} t
+ */
+function formatSubtaskPdfDescription(t) {
+  if (!t || typeof t !== 'object') return '—'
+  const imgUrl = t.image_url || t.image?.asset?.url
+  if (t.kind === 'image') {
+    const parts = ['Photo']
+    const b = String(t.body || '').trim()
+    if (b) parts.push(`— ${b}`)
+    if (imgUrl) parts.push(`(${truncateMiddle(imgUrl, 72)})`)
+    return parts.join(' ')
+  }
+  const body = String(t.body || '').trim()
+  return body || '—'
+}
+
+/**
+ * @param {object} doc jsPDF instance
+ * @param {number} margin
+ * @param {number} startY
+ * @returns {number} next Y after table(s)
+ */
+function appendWorkPathSubtasksTable(doc, margin, startY, steps) {
+  const body = []
+  ;(steps || []).forEach((step, si) => {
+    const subs = step.subtasks || []
+    if (!subs.length) return
+    const assignee = safe(step.assignee_name || step.assignee_uid)
+    subs.forEach((t) => {
+      body.push([
+        String(si + 1),
+        safe(step.title),
+        assignee,
+        subtaskDoneMark(!!t.done),
+        formatSubtaskPdfDescription(t),
+      ])
+    })
+  })
+  if (!body.length) return startY
+
+  let y = startY
+  if (y > 248) {
+    doc.addPage()
+    y = 14
+  }
+  doc.setFont(undefined, 'bold')
+  doc.setFontSize(9)
+  doc.text('Step checklists (all subtasks)', margin, y)
+  y += 4
+  doc.setFont(undefined, 'italic')
+  doc.setFontSize(7)
+  doc.text('[x] done   ·   [ ] not done', margin, y)
+  y += 5
+  doc.setFont(undefined, 'normal')
+  doc.setFontSize(8)
+
+  autoTable(doc, {
+    startY: y,
+    head: [['#', 'Step', 'Assigned to', 'Done', 'Task']],
+    body,
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 7, cellPadding: 1.3, overflow: 'linebreak', valign: 'top' },
+    headStyles: { fillColor: [82, 82, 91], textColor: [250, 250, 250] },
+    columnStyles: {
+      0: { cellWidth: 7 },
+      1: { cellWidth: 34 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 12, halign: 'center' },
+      4: { cellWidth: 93 },
+    },
+  })
+  return doc.lastAutoTable.finalY + 8
+}
+
 /**
  * @param {unknown[]} vehicles
  */
@@ -232,6 +319,7 @@ export function buildPublicPulloutsSchedulePdf(vehicles) {
         },
       })
       y = doc.lastAutoTable.finalY + 10
+      y = appendWorkPathSubtasksTable(doc, margin, y, steps)
     })
   }
 
