@@ -1,11 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, ContactRound } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, CalendarRange, ContactRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ASAHI_LOGO_URL, ASAHI_BRAND_NAME, ASAHI_PRODUCT_TITLE } from '../constants/branding'
 
 const mainNavItems = [
   { to: '/app', icon: LayoutGrid, label: 'Overview', permission: 'search:view' },
   { to: '/app/inventory', icon: Car, label: 'Inventory', permission: 'inventory:view' },
+  { to: '/pullouts', icon: CalendarRange, label: 'Pullouts', permission: 'inventory:view' },
   { to: '/app/customers', icon: ContactRound, label: 'Customers', permission: 'inventory:view' },
   { to: '/app/viewings', icon: CalendarClock, label: 'Viewings', permission: 'inventory:view' },
   { to: '/app/analytics', icon: BarChart3, label: 'Analytics', permission: 'analytics:view' },

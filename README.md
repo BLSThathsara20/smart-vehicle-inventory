@@ -9,7 +9,7 @@ A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (
 - **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
 - **ImgBB** – vehicle photos stored as URLs on each vehicle document
 - Search, filters, notifications, export (PDF/Excel), mobile-first UI
-- **Public scheduled collections** — `/pullouts` lists reserved vehicles with a planned collection date (no customer PII); read-only for everyone including guests, with PDF export
+- **Public scheduled collections** — `/pullouts` lists reserved vehicles with a planned collection date (no customer PII); read-only for everyone including guests, with PDF export. Signed-in staff also reach this from the sidebar **Pullouts** link (same URL).
 
 ## Setup
 
