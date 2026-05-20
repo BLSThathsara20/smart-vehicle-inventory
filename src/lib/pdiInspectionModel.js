@@ -229,6 +229,17 @@ export function isPdiFinalized(inspection) {
   return Boolean(n.finalized_at && String(n.finalized_at).trim())
 }
 
+/** Clears completion metadata so the checklist can be finalized again (e.g. after Undo PDI on vehicle page). */
+export function stripPdiFinalization(inspection) {
+  const n = normalizePdiInspection(inspection)
+  return normalizePdiInspection({
+    ...n,
+    finalized_at: null,
+    finalized_by_uid: null,
+    finalized_by_name: null,
+  })
+}
+
 /** Stringify for Sanity text field `pdi_inspection_json`. */
 export function serializePdiForStorage(inspection) {
   return JSON.stringify(normalizePdiInspection(inspection))

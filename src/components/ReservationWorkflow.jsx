@@ -4,7 +4,9 @@ import {
   insertWorkflowUpdate,
   deleteWorkflowUpdate,
   patchVehicleFields,
+  saveVehiclePdiInspectionJson,
 } from '../lib/sanityData'
+import { isPdiFinalized, stripPdiFinalization } from '../lib/pdiInspectionModel'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import {
@@ -84,8 +86,15 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
     if (!canEdit || !updates.pdi?.id) return
     setUpdatingStep('pdi_undo')
     try {
+      // Clear finalized_* on vehicle JSON first so collection page "Complete PDI" re-enables if delete succeeds next.
+      if (isPdiFinalized(vehicle?.pdi_inspection)) {
+        await saveVehiclePdiInspectionJson(
+          vehicleId,
+          stripPdiFinalization(vehicle.pdi_inspection),
+        )
+      }
       await deleteWorkflowUpdate(updates.pdi.id)
-      addNotification('PDI undone', 'success')
+      addNotification('PDI undone — checklist reopened for completion', 'success')
       fetchUpdates()
       onUpdate?.()
     } catch (err) {
