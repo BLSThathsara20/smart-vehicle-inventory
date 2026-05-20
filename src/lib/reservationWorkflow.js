@@ -1,7 +1,5 @@
-/** Downstream milestones that imply fresh full service was satisfied (historical skips). */
+/** Milestones after “fresh full service” that imply it was satisfied when never logged (historical skips). */
 export const LEGACY_STEPS_AFTER_FULL_SERVICE = [
-  'pdi',
-  'pdi_approved',
   'delivery',
   'ready',
   'ready_to_pickup',
@@ -33,13 +31,13 @@ export function isReservationStepComplete(
 
 export const RESERVATION_STEPS = [
   { key: 'reserved', label: 'Customer reserved', icon: 'Lock' },
+  { key: 'pdi', label: 'Pre-delivery inspection', icon: 'ClipboardCheck' },
+  { key: 'pdi_approved', label: 'PDI approved by manager', icon: 'ClipboardCheck', internalOnly: true },
   {
     key: 'full_service',
     label: 'Fresh full service',
     icon: 'Wrench',
   },
-  { key: 'pdi', label: 'Pre-delivery inspection', icon: 'ClipboardCheck' },
-  { key: 'pdi_approved', label: 'PDI approved by manager', icon: 'ClipboardCheck', internalOnly: true },
   { key: 'delivery', label: 'Delivery scheduled', icon: 'Calendar' },
   { key: 'ready', label: 'Ready for pullout', icon: 'Package' },
   { key: 'ready_to_pickup', label: 'Ready to pickup (manager approved)', icon: 'Package', internalOnly: true },
