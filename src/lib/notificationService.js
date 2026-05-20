@@ -156,7 +156,7 @@ export async function fetchAppNotifications() {
         vehicleId: vid,
         type: 'full_service_due',
         title: 'Full service due before collection',
-        message: `${fleet} — Record fresh full service in reservation workflow after PDI and before handover (${whenBit}).`,
+        message: `${fleet} — Record fresh full service in reservation workflow before PDI/handover (${whenBit}).`,
         dueDate: collectionYmd,
         sortAt: `${collectionYmd}T06:30:00`,
         severity: 'high',
