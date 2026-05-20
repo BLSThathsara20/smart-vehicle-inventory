@@ -4,13 +4,17 @@ import { getSecondaryAuth } from '../lib/firebase'
 import {
   fetchAllUserProfiles,
   fetchAllRoles,
+  fetchPendingStaffJoinRequests,
+  approveStaffJoinRequest,
+  dismissStaffJoinRequest,
   createUserProfileDoc,
   updateUserProfileDoc,
   deleteUserProfileDoc,
 } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { Users as UsersIcon, Plus, Pencil, Loader2, X, Mail, Lock, Trash2 } from 'lucide-react'
+import { Users as UsersIcon, Plus, Pencil, Loader2, X, Mail, Lock, Trash2, UserPlus } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 export function Users() {
   const { user: currentUser, hasPermission, isSuperAdmin, refreshProfile } = useAuth()
@@ -21,8 +25,10 @@ export function Users() {
   const [addOpen, setAddOpen] = useState(false)
   const [editUser, setEditUser] = useState(null)
   const [deleteUser, setDeleteUser] = useState(null)
-  const [saving, setSaving] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all')
+  const [loadMessage, setLoadMessage] = useState('Loading user profiles…')
+  const [pendingRequests, setPendingRequests] = useState([])
+  const [approveRequest, setApproveRequest] = useState(null)
 
   const canManage = hasPermission('users:manage') || hasPermission('roles:manage') || isSuperAdmin()
 
@@ -49,8 +55,14 @@ export function Users() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [profilesRes, rolesRes] = await Promise.all([fetchAllUserProfiles(), fetchAllRoles()])
+      setLoadMessage('Loading user profiles…')
+      const profilesRes = await fetchAllUserProfiles()
       setUsers(profilesRes || [])
+      setLoadMessage('Loading pending sign-ups…')
+      const pendingRes = await fetchPendingStaffJoinRequests()
+      setPendingRequests(pendingRes || [])
+      setLoadMessage('Loading roles…')
+      const rolesRes = await fetchAllRoles()
       setRoles(rolesRes || [])
     } catch (err) {
       addNotification(err.message || 'Failed to load users', 'error')
@@ -87,6 +99,71 @@ export function Users() {
         </button>
       </div>
 
+      {!loading && pendingRequests.length > 0 ? (
+        <div className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 sm:p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-amber-400 shrink-0" />
+            <h2 className="text-sm font-semibold text-amber-400 uppercase tracking-wide">
+              Pending Google sign-ins
+            </h2>
+            <span className="text-xs text-zinc-500">
+              ({pendingRequests.length}) assign a role to grant access
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {pendingRequests.map((req) => (
+              <li
+                key={req.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-white truncate">
+                    {req.display_name?.trim() || req.email || 'Unknown'}
+                  </p>
+                  <p className="text-xs text-zinc-500 truncate">{req.email}</p>
+                  <p className="text-[11px] text-zinc-600 mt-1">
+                    Requested{' '}
+                    {req.requested_at
+                      ? new Date(req.requested_at).toLocaleString()
+                      : '—'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (
+                        !window.confirm(
+                          `Dismiss registration request for ${req.email}? They will see access denied unless an admin approves them later.`,
+                        )
+                      )
+                        return
+                      try {
+                        await dismissStaffJoinRequest(req.id)
+                        addNotification('Request dismissed', 'success')
+                        fetchData()
+                      } catch (err) {
+                        addNotification(err.message || 'Could not dismiss', 'error')
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg border border-zinc-600 text-zinc-400 hover:bg-zinc-800 text-sm"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApproveRequest(req)}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-sm"
+                  >
+                    Approve…
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-4 mb-6">
         <label htmlFor="user-role-filter" className="text-sm text-zinc-500 shrink-0">
           Filter by role
@@ -114,10 +191,7 @@ export function Users() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-          <p className="text-zinc-500 text-sm">Loading users...</p>
-        </div>
+        <LoadingState message={loadMessage} variant="embedded" className="py-24" />
       ) : (
         <div className="space-y-3">
           {filteredUsers.length === 0 ? (
@@ -217,6 +291,95 @@ export function Users() {
           addNotification={addNotification}
         />
       )}
+
+      {approveRequest && (
+        <ApproveStaffSignupModal
+          request={approveRequest}
+          roles={roles.filter((r) => r.name !== 'super_admin')}
+          onClose={() => setApproveRequest(null)}
+          onSuccess={() => {
+            setApproveRequest(null)
+            fetchData()
+          }}
+          addNotification={addNotification}
+        />
+      )}
+    </div>
+  )
+}
+
+function ApproveStaffSignupModal({ request, roles, onClose, onSuccess, addNotification }) {
+  const [roleId, setRoleId] = useState(roles[0]?.id || '')
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!roleId) {
+      addNotification('Choose a role', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      await approveStaffJoinRequest(request.id, { role_id: roleId })
+      addNotification('User approved — they can refresh or sign in again.', 'success')
+      onSuccess()
+    } catch (err) {
+      addNotification(err.message || 'Approval failed', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div
+        className="bg-zinc-900 rounded-2xl border border-zinc-700/80 shadow-2xl w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center p-5 border-b border-zinc-700/80">
+          <h3 className="text-lg font-semibold text-white">Approve staff sign-up</h3>
+          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <p className="text-sm text-zinc-400">
+            Grant access for{' '}
+            <span className="text-white font-medium">{request.email}</span>
+            {request.display_name?.trim() ? (
+              <>
+                {' '}
+                ({request.display_name.trim()})
+              </>
+            ) : null}
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Role</label>
+            <select
+              value={roleId}
+              onChange={(e) => setRoleId(e.target.value)}
+              required
+              className="w-full px-4 py-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-white focus:ring-2 focus:ring-amber-500/40"
+            >
+              {roles.length === 0 ? (
+                <option value="">No roles available</option>
+              ) : (
+                roles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name.replace('_', ' ')}</option>
+                ))
+              )}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving || !roleId} className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-medium transition disabled:opacity-50">
+              {saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Approve & add user'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

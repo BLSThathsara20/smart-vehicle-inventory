@@ -9,9 +9,14 @@ export const DETAIL_SECTIONS = [
     title: 'Core identification',
     fields: [
       { key: 'stock_id', label: 'Stock ID', format: (v) => v || 'Not added' },
-      { key: 'plate_no', label: 'Plate no', format: (v) => v || 'Not added' },
+      { key: 'plate_no', label: 'Plate no', format: (v) => v || 'Not added', pendingWhenEmpty: true },
       { key: 'vin', label: 'VIN', format: (v) => v || 'Not added' },
       { key: 'location', label: 'Location', format: (v) => v || 'Not added' },
+      {
+        key: 'car_key_location',
+        label: 'Car key location',
+        format: (v) => (v != null && v !== '' ? String(v) : 'Not added'),
+      },
     ],
   },
   {

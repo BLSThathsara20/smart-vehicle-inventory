@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { patchVehicleFields } from '../lib/sanityData'
 import { linesToReservationConditions } from '../lib/reservationConditions'
+import { serializePdiForStorage, seedPdiFromVehicleAndCustomer } from '../lib/pdiInspectionModel'
 import { Lock, X, Plus } from 'lucide-react'
 
 const inputClass = 'w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
@@ -77,6 +78,9 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
         buyers_name: form.customer_name.trim(),
         pickup_token: pickupToken,
         reservation_conditions,
+        pdi_inspection_json: serializePdiForStorage(
+          seedPdiFromVehicleAndCustomer(vehicle, { customer_name: form.customer_name })
+        ),
       }
       await patchVehicleFields(vehicle.id, payload)
       onSuccess?.()

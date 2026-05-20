@@ -1,15 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, Car, PlusCircle, MoreHorizontal, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3 } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, MoreHorizontal, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, ContactRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const moreMenuItems = [
+  { to: '/app/customers', icon: ContactRound, label: 'Customers', permission: 'inventory:view' },
+  { to: '/app/viewings', icon: CalendarClock, label: 'Viewings', permission: 'inventory:view' },
   { to: '/app/notifications', icon: Bell, label: 'Notifications', permission: 'inventory:view' },
   { to: '/app/health', icon: Activity, label: 'App Health', permission: 'health:view' },
   { to: '/app/space', icon: HardDrive, label: 'Storage & Space', permission: 'space:view' },
   { to: '/app/roles', icon: Shield, label: 'Roles & Permissions', permission: 'roles:manage' },
   { to: '/app/users', icon: UsersIcon, label: 'Users', permission: 'users:manage' },
-  { to: '/app/work-paths', icon: Route, label: 'Work paths', permission: 'workflows:manage' },
+  { to: '/app/work-paths', icon: Route, label: 'Work paths', workPathNav: true },
   { to: '/app/settings', icon: Settings, label: 'Settings', permission: 'settings:view' },
 ]
 
@@ -18,11 +20,12 @@ export function BottomNav() {
   const menuRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
-  const { hasPermission, isSuperAdmin } = useAuth()
+  const { hasPermission, isSuperAdmin, canAccessWorkPaths } = useAuth()
 
-  const filteredMoreItems = moreMenuItems.filter(
-    (item) => !item.permission || isSuperAdmin() || hasPermission(item.permission)
-  )
+  const filteredMoreItems = moreMenuItems.filter((item) => {
+    if (item.workPathNav) return isSuperAdmin() || canAccessWorkPaths()
+    return !item.permission || isSuperAdmin() || hasPermission(item.permission)
+  })
   const isMoreActive = filteredMoreItems.some((item) => location.pathname === item.to)
   const isOverviewActive = location.pathname === '/app' || location.pathname === '/app/search'
 

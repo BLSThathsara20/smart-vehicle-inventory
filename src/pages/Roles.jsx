@@ -3,6 +3,7 @@ import { fetchAllRoles, fetchAllPermissions, updateRolePermissions } from '../li
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { Shield, ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 export function Roles() {
   const { hasPermission } = useAuth()
@@ -12,6 +13,7 @@ export function Roles() {
   const [rolePerms, setRolePerms] = useState({})
   const [expandedRole, setExpandedRole] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Loading roles and permissions…')
   const [saving, setSaving] = useState(null)
 
   const canManage = hasPermission('roles:manage')
@@ -22,6 +24,7 @@ export function Roles() {
 
   async function fetchData() {
     setLoading(true)
+    setLoadMessage('Loading roles and permissions…')
     try {
       const [rolesData, permsData] = await Promise.all([fetchAllRoles(), fetchAllPermissions()])
       setRoles(rolesData || [])
@@ -91,12 +94,7 @@ export function Roles() {
   }
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24">
-        <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-        <p className="text-zinc-500 text-sm">Loading roles...</p>
-      </div>
-    )
+    return <LoadingState message={loadMessage} variant="embedded" className="py-24" />
   }
 
   return (

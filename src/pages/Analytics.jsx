@@ -26,7 +26,8 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { BarChart3, Loader2, Info } from 'lucide-react'
+import { BarChart3, Info } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 const CHART_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#34d399', '#fb7185', '#fbbf24', '#2dd4bf', '#c084fc']
 
@@ -47,6 +48,7 @@ export function Analytics() {
   const { addNotification } = useNotification()
   const canView = hasPermission('analytics:view')
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Loading analytics…')
   const [counts, setCounts] = useState(null)
   const [workflowRows, setWorkflowRows] = useState([])
   const [soldRows, setSoldRows] = useState([])
@@ -59,16 +61,17 @@ export function Analytics() {
     let cancelled = false
     ;(async () => {
       try {
-        const [c, w, s] = await Promise.all([
-          vehicleCounts(),
-          fetchVehiclesWithWorkPathAnalytics(500),
-          fetchSoldVehiclesAnalyticsTimeline(500),
-        ])
-        if (!cancelled) {
-          setCounts(c)
-          setWorkflowRows(w || [])
-          setSoldRows(s || [])
-        }
+        setLoadMessage('Loading inventory counts…')
+        const c = await vehicleCounts()
+        if (cancelled) return
+        setCounts(c)
+        setLoadMessage('Loading vehicles with workflow timer data…')
+        const w = await fetchVehiclesWithWorkPathAnalytics(500)
+        if (cancelled) return
+        setWorkflowRows(w || [])
+        setLoadMessage('Loading sold-vehicle timeline…')
+        const s = await fetchSoldVehiclesAnalyticsTimeline(500)
+        if (!cancelled) setSoldRows(s || [])
       } catch (e) {
         if (!cancelled) addNotification(e.message || 'Failed to load analytics', 'error')
       } finally {
@@ -84,6 +87,7 @@ export function Analytics() {
     if (!counts) return []
     return [
       { name: 'Available', value: counts.available || 0 },
+      { name: 'Newly arrived', value: counts.newly_arrived || 0 },
       { name: 'Reserved', value: counts.reserved || 0 },
       { name: 'Sold', value: counts.sold || 0 },
     ].filter((x) => x.value > 0)
@@ -145,12 +149,7 @@ export function Analytics() {
   }
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24">
-        <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-        <p className="text-zinc-500 text-sm">Loading analytics…</p>
-      </div>
-    )
+    return <LoadingState message={loadMessage} variant="embedded" className="py-24" />
   }
 
   return (

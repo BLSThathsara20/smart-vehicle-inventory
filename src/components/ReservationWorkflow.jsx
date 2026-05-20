@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Undo2,
 } from 'lucide-react'
+import { LoadingState } from './LoadingState'
 
 const ICONS = {
   Lock,
@@ -37,6 +38,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
   const { addNotification } = useNotification()
   const [updates, setUpdates] = useState({})
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Loading reservation updates…')
   const [updatingStep, setUpdatingStep] = useState(null)
   const [comment, setComment] = useState('')
   const [activeStep, setActiveStep] = useState(null)
@@ -48,6 +50,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
 
   async function fetchUpdates() {
     setLoading(true)
+    setLoadMessage('Fetching reservation workflow…')
     try {
       const data = await fetchWorkflowUpdates(vehicleId)
 
@@ -194,11 +197,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-6 h-6 text-amber-500/80 animate-spin" />
-      </div>
-    )
+    return <LoadingState message={loadMessage} variant="compact" className="py-8" />
   }
 
   return (

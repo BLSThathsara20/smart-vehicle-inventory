@@ -19,10 +19,15 @@ export default {
 					"72%": { transform: "rotate(-6deg)" },
 					"90%": { transform: "rotate(3deg)" },
 				},
+				"loading-msg-in": {
+					"0%": { opacity: "0", transform: "translateY(8px)" },
+					"100%": { opacity: "1", transform: "translateY(0)" },
+				},
 			},
 			animation: {
 				"spin-slow": "spin 20s linear infinite",
 				"bell-swing": "bell-swing 2.4s ease-in-out infinite",
+				"loading-msg-in": "loading-msg-in 0.45s ease-out forwards",
 			},
 		},
 	},

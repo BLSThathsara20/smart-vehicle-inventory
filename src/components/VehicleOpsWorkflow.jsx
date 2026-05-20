@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   fetchWorkPathTemplatesList,
+  fetchWorkPathById,
   applyWorkPathToVehicle,
   normalizeVehicleWorkflowInstances,
   getWorkflowDeadlineVisual,
   workflowInstanceStepKey,
 } from '../lib/sanityData'
+import { WorkPathApplyChecklists } from './WorkPathApplyChecklists'
 import { getParticipantPalette } from '../lib/workflowParticipantColors'
 import { vehicleMeetsApplyWhen } from '../lib/workflowApplyRules'
 import { WorkPathInstancePanel } from './WorkPathInstancePanel'
 import { useNotification } from '../context/NotificationContext'
-import { useAuth } from '../context/AuthContext'
 import { Route, Loader2, ChevronRight, X, ExternalLink } from 'lucide-react'
 
 function formatDt(iso) {
@@ -50,7 +51,6 @@ export function VehicleOpsWorkflow({
   canManageWorkflows,
 }) {
   const { addNotification } = useNotification()
-  const { isSuperAdmin } = useAuth()
   const [templates, setTemplates] = useState([])
   const [templatesLoading, setTemplatesLoading] = useState(true)
   const [selectedTemplate, setSelectedTemplate] = useState('')
@@ -58,6 +58,9 @@ export function VehicleOpsWorkflow({
   const [priority, setPriority] = useState('normal')
   const [busy, setBusy] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [templateDetail, setTemplateDetail] = useState(null)
+  const [templateDetailLoading, setTemplateDetailLoading] = useState(false)
+  const [assignSubtasksByKey, setAssignSubtasksByKey] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -76,6 +79,34 @@ export function VehicleOpsWorkflow({
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setTemplateDetail(null)
+      setAssignSubtasksByKey({})
+      return
+    }
+    let cancelled = false
+    setTemplateDetailLoading(true)
+    fetchWorkPathById(selectedTemplate)
+      .then((t) => {
+        if (cancelled) return
+        setTemplateDetail(t && t.steps?.length ? t : null)
+        setAssignSubtasksByKey({})
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTemplateDetail(null)
+          setAssignSubtasksByKey({})
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTemplateDetailLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedTemplate])
 
   const instances = useMemo(() => {
     const raw = normalizeVehicleWorkflowInstances(vehicle)
@@ -98,6 +129,22 @@ export function VehicleOpsWorkflow({
       addNotification(check.message, 'error')
       return
     }
+    for (const step of templateDetail?.steps || []) {
+      const sk = step._key
+      if (!sk) continue
+      const subs = assignSubtasksByKey[sk] || []
+      for (const st of subs) {
+        if (st.kind === 'image') {
+          if (!(st.image_url || '').trim()) {
+            addNotification(`Step "${step.title}": remove incomplete photo rows or finish uploading`, 'error')
+            return
+          }
+        } else if (!(st.body || '').trim()) {
+          addNotification(`Step "${step.title}": fill in each text line or remove it`, 'error')
+          return
+        }
+      }
+    }
     setBusy(true)
     try {
       let deadlineAt = null
@@ -108,13 +155,14 @@ export function VehicleOpsWorkflow({
       await applyWorkPathToVehicle(vehicle.id, selectedTemplate, {
         deadlineAt,
         priority: priority === 'urgent' ? 'urgent' : 'normal',
-        appliedByUid: currentUid || '',
-        appliedByName: currentDisplayName || '',
+        step_subtasks_by_key: assignSubtasksByKey,
       })
       addNotification('Work path applied', 'success')
       setSelectedTemplate('')
       setDeadlineLocal('')
       setPriority('normal')
+      setTemplateDetail(null)
+      setAssignSubtasksByKey({})
       onUpdate?.()
     } catch (e) {
       addNotification(e.message || 'Could not apply work path', 'error')
@@ -187,7 +235,7 @@ export function VehicleOpsWorkflow({
         {showApplyBlock && !templatesLoading && templates.length > 0 && !hasWorkPath && (
           <div className="space-y-3 p-3 rounded-xl bg-zinc-800/30 border border-zinc-700/50">
             <p className="text-xs text-zinc-500">Assign one work path to this vehicle (only one at a time).</p>
-            <select
+                       <select
               value={selectedTemplate}
               onChange={(e) => setSelectedTemplate(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-white text-sm"
@@ -199,6 +247,18 @@ export function VehicleOpsWorkflow({
                 </option>
               ))}
             </select>
+            {selectedTemplate && templateDetailLoading && (
+              <p className="text-[11px] text-zinc-500">Loading steps…</p>
+            )}
+            {selectedTemplate && templateDetail?.steps?.length ? (
+              <WorkPathApplyChecklists
+                templateSteps={templateDetail.steps}
+                subtasksByStepKey={assignSubtasksByKey}
+                onSubtasksByStepKeyChange={setAssignSubtasksByKey}
+                disabled={busy}
+                addNotification={addNotification}
+              />
+            ) : null}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase mb-1">Deadline</label>
@@ -385,7 +445,6 @@ export function VehicleOpsWorkflow({
                       currentDisplayName={currentDisplayName}
                       canApply={canApply}
                       canManageWorkflows={canManageWorkflows}
-                      isSuperAdminUser={isSuperAdmin()}
                       showApplyBlock={showApplyBlock}
                       onUpdate={onUpdate}
                     />
@@ -399,7 +458,6 @@ export function VehicleOpsWorkflow({
                       currentDisplayName={currentDisplayName}
                       canApply={canApply}
                       canManageWorkflows={canManageWorkflows}
-                      isSuperAdminUser={isSuperAdmin()}
                       showApplyBlock={showApplyBlock}
                       onUpdate={onUpdate}
                     />

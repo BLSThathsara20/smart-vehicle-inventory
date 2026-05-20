@@ -4,59 +4,59 @@
 
 /* Car Inventory - luxury dark theme */
 :root {
-  --color-primary: #f59e0b;
-  --color-primary-hover: #d97706;
-  --color-primary-muted: rgba(245, 158, 11, 0.15);
+	--color-primary: #f59e0b;
+	--color-primary-hover: #d97706;
+	--color-primary-muted: rgba(245, 158, 11, 0.15);
 }
 
 /* Safe area for mobile bottom nav (notch/home indicator) */
 .safe-area-pb {
-  padding-bottom: env(safe-area-inset-bottom, 0);
+	padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* Toast animation */
 @keyframes slide-in-from-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
 }
 
 .animate-in {
-  animation: slide-in-from-right 0.3s ease-out;
+	animation: slide-in-from-right 0.3s ease-out;
 }
 
 @keyframes slide-up {
-  from {
-    transform: translate(-50%, 8px);
-    opacity: 0;
-  }
-  to {
-    transform: translate(-50%, 0);
-    opacity: 1;
-  }
+	from {
+		transform: translate(-50%, 8px);
+		opacity: 0;
+	}
+	to {
+		transform: translate(-50%, 0);
+		opacity: 1;
+	}
 }
 
 .animate-slide-up {
-  animation: slide-up 0.2s ease-out;
+	animation: slide-up 0.2s ease-out;
 }
 
 /* Focus ring for accessibility */
 *:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
 }
 
 /* Smooth scrolling */
 html {
-  scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
 
 /* Prevent overscroll on mobile */
 body {
-  overscroll-behavior: none;
+	overscroll-behavior: none;
 }

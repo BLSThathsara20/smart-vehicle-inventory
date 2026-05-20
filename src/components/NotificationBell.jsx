@@ -20,7 +20,8 @@ export function NotificationBell() {
     }
     try {
       const items = await fetchActiveAppNotifications(user.uid)
-      setCount(items.length)
+      const open = items.filter((n) => !n.relevantTaskDone).length
+      setCount(open)
     } catch {
       setCount(0)
     }

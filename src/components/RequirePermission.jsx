@@ -1,14 +1,17 @@
 import { useAuth } from '../context/AuthContext'
 
-export function RequirePermission({ permission, children }) {
+export function RequirePermission({ permission, anyOf, children }) {
   const { hasPermission, isSuperAdmin, refreshProfile } = useAuth()
+  const codes =
+    Array.isArray(anyOf) && anyOf.length > 0 ? anyOf : permission ? [permission] : []
+  const touchesWorkflows = codes.some((c) => String(c).startsWith('workflows:'))
   const allowed =
-    !permission ||
+    codes.length === 0 ||
     isSuperAdmin() ||
-    hasPermission(permission) ||
+    codes.some((c) => hasPermission(c)) ||
     // Fallback: roles:manage implies admin-level access (super_admin or admin)
-    (permission === 'users:manage' && hasPermission('roles:manage')) ||
-    (permission === 'workflows:manage' && hasPermission('roles:manage'))
+    (codes.includes('users:manage') && hasPermission('roles:manage')) ||
+    (touchesWorkflows && hasPermission('roles:manage'))
   if (allowed) return children
   return (
     <div className="p-4 space-y-3">

@@ -3,10 +3,13 @@ import {
   removeVehicleWorkPathInstance,
   completeVehicleWorkPathStep,
   addWorkPathDiscussionMessage,
+  deleteWorkPathDiscussionMessage,
   getWorkflowDeadlineVisual,
   startWorkPathTimeSession,
   endWorkPathTimeSession,
   workflowInstanceStepKey,
+  setWorkPathStepSubtaskDone,
+  workflowStepIncompleteSubtasksCount,
 } from '../lib/sanityData'
 import { useNotification } from '../context/NotificationContext'
 import { getParticipantPalette } from '../lib/workflowParticipantColors'
@@ -29,6 +32,7 @@ import {
   Users,
   User,
   Timer,
+  Trash2,
 } from 'lucide-react'
 
 function formatDt(iso) {
@@ -87,7 +91,7 @@ function messageVisible(msg, byKey, currentUid) {
   return t === currentUid || msg.author_uid === currentUid
 }
 
-function DiscussionThread({ discussion, currentUid, canPost, onReply }) {
+function DiscussionThread({ discussion, currentUid, canPost, onReply, onDeleteMessage, deleteBusy }) {
   const byKey = useMemo(() => {
     const m = new Map()
     for (const x of discussion || []) m.set(x._key, x)
@@ -107,6 +111,7 @@ function DiscussionThread({ discussion, currentUid, canPost, onReply }) {
     const palette = getParticipantPalette(msg.author_uid)
     const vis = msg.visibility === 'direct' ? 'direct' : 'all'
     const replies = (byParent.get(msg._key) || []).filter((r) => messageVisible(r, byKey, currentUid))
+    const canDeleteOwn = onDeleteMessage && currentUid && msg.author_uid === currentUid
     return (
       <div
         className={`rounded-lg overflow-hidden ${depth ? 'ml-3 mt-2 pl-3' : ''}`}
@@ -142,15 +147,29 @@ function DiscussionThread({ discussion, currentUid, canPost, onReply }) {
             )}
           </div>
           <p className="text-sm text-zinc-100 mt-1.5 whitespace-pre-wrap">{msg.body}</p>
-          {canPost && currentUid && (
-            <button
-              type="button"
-              onClick={() => onReply(msg._key)}
-              className="text-[10px] text-amber-500/90 hover:text-amber-400 mt-1"
-            >
-              Reply
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            {canPost && currentUid && (
+              <button
+                type="button"
+                onClick={() => onReply(msg._key)}
+                className="text-[10px] text-amber-500/90 hover:text-amber-400"
+              >
+                Reply
+              </button>
+            )}
+            {canDeleteOwn ? (
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => onDeleteMessage(msg._key)}
+                className="text-[10px] text-rose-400/90 hover:text-rose-300 inline-flex items-center gap-1 disabled:opacity-40"
+                title="Delete your message and any replies under it"
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete
+              </button>
+            ) : null}
+          </div>
           {replies.map((r) => (
             <Msg key={r._key} msg={r} depth />
           ))}
@@ -251,6 +270,10 @@ export function WorkPathInstancePanel({
   const parallel = inst.allow_step_overlap === true
   const currentStep = active && !done && !parallel && idx < steps.length ? steps[idx] : null
   const sequentialStepKey = currentStep != null ? workflowInstanceStepKey(steps, idx) : null
+  const currentStepPendingCount = useMemo(
+    () => (currentStep ? workflowStepIncompleteSubtasksCount(currentStep) : 0),
+    [currentStep]
+  )
   const completedMap = stepCompletionMap(inst.completed_steps)
   const canPostDiscussion = !!currentUid
 
@@ -271,6 +294,24 @@ export function WorkPathInstancePanel({
       onUpdate?.()
     } catch (e) {
       addNotification(e.message || 'Could not remove', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleStepSubtask(stepKey, stepRow, subtask, nextDone) {
+    if (!vehicleId || !currentUid || vehicleSold) return
+    setBusy(true)
+    try {
+      await setWorkPathStepSubtaskDone(vehicleId, inst.instance_id, currentUid, {
+        step_key: stepKey,
+        subtask_key: subtask._key,
+        done: nextDone,
+        override: !!(canManageWorkflows && currentUid !== stepRow.assignee_uid),
+      })
+      onUpdate?.()
+    } catch (e) {
+      addNotification(e.message || 'Could not update checklist', 'error')
     } finally {
       setBusy(false)
     }
@@ -332,6 +373,21 @@ export function WorkPathInstancePanel({
       onUpdate?.()
     } catch (e) {
       addNotification(e.message || 'Could not post', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDeleteDiscussionMessage(msgKey) {
+    if (!vehicleId || !currentUid || vehicleSold) return
+    if (!confirm('Delete this message and all replies under it?')) return
+    setBusy(true)
+    try {
+      await deleteWorkPathDiscussionMessage(vehicleId, inst.instance_id, msgKey, currentUid)
+      addNotification('Message removed', 'success')
+      onUpdate?.()
+    } catch (e) {
+      addNotification(e.message || 'Could not delete', 'error')
     } finally {
       setBusy(false)
     }
@@ -480,6 +536,13 @@ export function WorkPathInstancePanel({
           const pal = getParticipantPalette(s.assignee_uid)
           const rowTimer =
             parallel && currentUid ? findOpenSessionForUserOnStep(inst, currentUid, sk) : null
+          const canToggleSubtasks =
+            !vehicleSold &&
+            !isStepDone &&
+            (isSequentialCurrent || isParallelOpen) &&
+            (currentUid === s.assignee_uid || canManageWorkflows)
+          const subtasks = s.subtasks || []
+          const pendingSubCount = workflowStepIncompleteSubtasksCount(s)
           return (
             <li
               key={s._key || sk || i}
@@ -531,6 +594,123 @@ export function WorkPathInstancePanel({
                     Started {formatDt(rec.started_at)} · Done {formatDt(rec.completed_at)}
                   </p>
                 )}
+                {subtasks.length > 0 && (
+                  <ul className="mt-2 space-y-2.5 list-none pl-0 border-t border-zinc-700/40 pt-2">
+                    {subtasks.map((t) => {
+                      const imgUrl = t.image_url || t.image?.asset?.url
+                      const isSubDone = !!t.done
+                      const isPhoto = t.kind === 'image'
+                      return (
+                        <li key={t._key}>
+                          {isPhoto ? (
+                            <div className="relative rounded-lg overflow-hidden border border-zinc-600/70 max-w-[220px] bg-zinc-950/60">
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-28 object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-28 flex items-center justify-center text-[10px] text-zinc-600 px-2 text-center">
+                                  Photo reference
+                                </div>
+                              )}
+                              {canToggleSubtasks ? (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  title={isSubDone ? 'Mark not done' : 'Mark done'}
+                                  onClick={() => toggleStepSubtask(sk, s, t, !isSubDone)}
+                                  className={`absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-md transition disabled:opacity-50 ${
+                                    isSubDone
+                                      ? 'bg-emerald-500 border-emerald-200 text-zinc-950'
+                                      : 'bg-zinc-900/95 border-zinc-500 text-zinc-200 hover:border-amber-500/50'
+                                  }`}
+                                >
+                                  {isSubDone ? (
+                                    <CheckCircle className="w-4 h-4" />
+                                  ) : (
+                                    <Circle className="w-4 h-4" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span
+                                  className={`absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                                    isSubDone
+                                      ? 'bg-emerald-500/90 border-emerald-200 text-zinc-950'
+                                      : 'bg-zinc-800/90 border-zinc-600 text-zinc-500'
+                                  }`}
+                                  aria-hidden
+                                >
+                                  {isSubDone ? (
+                                    <CheckCircle className="w-4 h-4" />
+                                  ) : (
+                                    <Circle className="w-4 h-4" />
+                                  )}
+                                </span>
+                              )}
+                              {(t.body || '').trim() ? (
+                                <p className="text-[11px] text-zinc-400 px-1 pb-1 pt-1 border-t border-zinc-700/50 mt-1">
+                                  {(t.body || '').trim()}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              {canToggleSubtasks ? (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  title={isSubDone ? 'Mark not done' : 'Mark done'}
+                                  onClick={() => toggleStepSubtask(sk, s, t, !isSubDone)}
+                                  className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center border-2 transition disabled:opacity-50 ${
+                                    isSubDone
+                                      ? 'bg-emerald-500/90 border-emerald-300 text-zinc-950'
+                                      : 'bg-zinc-800 border-zinc-600 text-zinc-300 hover:border-amber-500/40'
+                                  }`}
+                                >
+                                  {isSubDone ? (
+                                    <CheckCircle className="w-4 h-4" />
+                                  ) : (
+                                    <Circle className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span
+                                  className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center border-2 ${
+                                    isSubDone
+                                      ? 'bg-emerald-500/90 border-emerald-300 text-zinc-950'
+                                      : 'bg-zinc-800 border-zinc-600 text-zinc-500'
+                                  }`}
+                                >
+                                  {isSubDone ? (
+                                    <CheckCircle className="w-4 h-4" />
+                                  ) : (
+                                    <Circle className="w-3.5 h-3.5" />
+                                  )}
+                                </span>
+                              )}
+                              <span
+                                className={`text-xs leading-snug pt-1 ${
+                                  isSubDone ? 'text-zinc-500 line-through' : 'text-zinc-200'
+                                }`}
+                              >
+                                {t.body}
+                              </span>
+                            </div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {parallel && active && !isStepDone && !vehicleSold && pendingSubCount > 0 && (
+                  <p className="mt-2 text-[10px] text-amber-400/90">
+                    Checklist: {pendingSubCount} item{pendingSubCount === 1 ? '' : 's'} left before this step can be
+                    completed.
+                  </p>
+                )}
                 {parallel && active && !isStepDone && !vehicleSold && (
                   <div className="mt-2 space-y-1.5">
                     {currentUid === s.assignee_uid ? (
@@ -575,6 +755,12 @@ export function WorkPathInstancePanel({
 
       {active && currentStep && (
         <div className="px-3 pb-3 space-y-2">
+          {currentStepPendingCount > 0 && !vehicleSold && (
+            <p className="text-center text-[11px] text-amber-400/90">
+              Complete {currentStepPendingCount} checklist item{currentStepPendingCount === 1 ? '' : 's'} before
+              finishing this step.
+            </p>
+          )}
           {currentUid === currentStep.assignee_uid && !vehicleSold ? (
             <>
               {openTimer ? (
@@ -661,6 +847,8 @@ export function WorkPathInstancePanel({
             setReplyTo(parentKey)
             setCommentDraft('')
           }}
+          onDeleteMessage={canPostDiscussion ? handleDeleteDiscussionMessage : null}
+          deleteBusy={busy}
         />
         {canPostDiscussion && (
           <div className="mt-3 space-y-2">

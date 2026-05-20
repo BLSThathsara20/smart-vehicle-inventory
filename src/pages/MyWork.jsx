@@ -4,13 +4,16 @@ import { fetchVehiclesWithWorkflows, collectMyWorkItems, getWorkflowDeadlineVisu
 import { getParticipantPalette } from '../lib/workflowParticipantColors'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { ClipboardList, Loader2, Car, ExternalLink } from 'lucide-react'
+import { ClipboardList, Car, ExternalLink } from 'lucide-react'
+import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { LoadingState } from '../components/LoadingState'
 
 export function MyWork() {
   const { user, hasPermission } = useAuth()
   const { addNotification } = useNotification()
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Loading your tasks and vehicles…')
 
   const canView = hasPermission('inventory:view')
 
@@ -22,6 +25,7 @@ export function MyWork() {
     let cancelled = false
     ;(async () => {
       try {
+        setLoadMessage('Fetching vehicles and prep workflows…')
         const v = await fetchVehiclesWithWorkflows()
         if (!cancelled) setVehicles(v || [])
       } catch (e) {
@@ -58,10 +62,7 @@ export function MyWork() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-          <p className="text-zinc-500 text-sm">Loading…</p>
-        </div>
+        <LoadingState message={loadMessage} variant="embedded" className="py-24" />
       ) : items.length === 0 ? (
         <p className="text-zinc-500 text-sm py-12 text-center border border-dashed border-zinc-800 rounded-2xl">
           Nothing assigned to you right now.
@@ -95,7 +96,7 @@ export function MyWork() {
                     }
                   >
                     {thumb ? (
-                      <img src={thumb} alt="" className="w-full h-full object-cover" />
+                      <LazyVehicleImage src={thumb} alt="" className="w-full h-full" imgClassName="object-cover" />
                     ) : (
                       <Car className="w-6 h-6 text-amber-500/80" />
                     )}

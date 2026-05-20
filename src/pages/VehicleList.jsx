@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
 	fetchBrandsAndModels,
 	fetchVehiclesPage,
@@ -6,6 +7,7 @@ import {
 	fetchAllVehiclesFiltered,
 } from "../lib/sanityData";
 import { VehicleCard } from "../components/VehicleCard";
+import { LoadingState } from "../components/LoadingState";
 import { useNotification } from "../context/NotificationContext";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -18,6 +20,8 @@ import {
 	Search as SearchIcon,
 	FileDown,
 	FileSpreadsheet,
+	PlusCircle,
+	CircleDashed,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -80,6 +84,7 @@ const EXPORT_COLUMNS = [
 export function VehicleList() {
 	const [vehicles, setVehicles] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [inventoryLoadMessage, setInventoryLoadMessage] = useState("Fetching vehicles…");
 	const [availableBrands, setAvailableBrands] = useState([]);
 	const [brandsLoading, setBrandsLoading] = useState(true);
 	const [page, setPage] = useState(1);
@@ -89,6 +94,7 @@ export function VehicleList() {
 	const [brandFilter, setBrandFilter] = useState("");
 	const [modelFilter, setModelFilter] = useState("");
 	const [statusFilter, setStatusFilter] = useState("");
+	const [pendingPlateFilter, setPendingPlateFilter] = useState(false);
 	const [maxPriceInput, setMaxPriceInput] = useState("");
 	const [models, setModels] = useState([]);
 	const [modelsByBrandMap, setModelsByBrandMap] = useState({});
@@ -97,6 +103,7 @@ export function VehicleList() {
 	const { addNotification } = useNotification();
 	const { hasPermission } = useAuth();
 	const canExport = hasPermission("inventory:edit");
+	const canAddVehicle = hasPermission("inventory:add");
 
 	useEffect(() => {
 		async function fetchBrands() {
@@ -133,20 +140,27 @@ export function VehicleList() {
 
 	useEffect(() => {
 		fetchVehicles();
-	}, [page, searchQuery, brandFilter, modelFilter, statusFilter, maxPriceInput]);
+	}, [page, searchQuery, brandFilter, modelFilter, statusFilter, pendingPlateFilter, maxPriceInput]);
 
 	useEffect(() => {
 		fetchModelCounts();
-	}, [searchQuery, brandFilter, modelFilter, statusFilter, maxPriceInput]);
+	}, [searchQuery, brandFilter, modelFilter, statusFilter, pendingPlateFilter, maxPriceInput]);
 
 	function listFilters() {
 		const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
+		let status;
+		if (statusFilter === "available") status = "available";
+		else if (statusFilter === "sold") status = "sold";
+		else if (statusFilter === "reserved") status = "reserved";
+		else if (statusFilter === "newly_arrived") status = "newly_arrived";
+		else status = undefined;
 		return {
-			status: statusFilter === "available" ? "available" : statusFilter === "sold" ? "sold" : statusFilter === "reserved" ? "reserved" : undefined,
+			status,
 			search: searchQuery.trim() || undefined,
 			brand: brandFilter || undefined,
 			model: modelFilter || undefined,
 			maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+			pendingPlateOnly: pendingPlateFilter ? true : undefined,
 		};
 	}
 
@@ -163,6 +177,7 @@ export function VehicleList() {
 
 	async function fetchVehicles() {
 		setLoading(true);
+		setInventoryLoadMessage(`Fetching vehicles (page ${page}, filters applied)…`);
 		try {
 			const filters = listFilters();
 			if (!filters.status) delete filters.status;
@@ -253,7 +268,13 @@ export function VehicleList() {
 	const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
 	const hasPrev = page > 1;
 	const hasNext = page < totalPages;
-	const hasActiveFilters = searchQuery || brandFilter || modelFilter || statusFilter || maxPriceInput.trim();
+	const hasActiveFilters =
+		searchQuery ||
+		brandFilter ||
+		modelFilter ||
+		statusFilter ||
+		pendingPlateFilter ||
+		maxPriceInput.trim();
 
 	const applyFilters = () => {
 		setPage(1);
@@ -265,6 +286,7 @@ export function VehicleList() {
 		setBrandFilter("");
 		setModelFilter("");
 		setStatusFilter("");
+		setPendingPlateFilter(false);
 		setMaxPriceInput("");
 		setPage(1);
 	};
@@ -288,21 +310,70 @@ export function VehicleList() {
 						{canExport ? "Browse and manage your fleet" : "Browse fleet (view only)"}
 					</p>
 				</div>
-				<button
-					type="button"
-					onClick={() => setFilterOpen(true)}
-					className={`p-3 rounded-xl border transition-all ${
-						hasActiveFilters
-							? "bg-amber-500/10 border-amber-500/40 text-amber-400"
-							: "bg-zinc-800/50 border-zinc-700/80 text-zinc-400 hover:text-white hover:border-zinc-600"
-					}`}
-					aria-label="Filter"
-				>
-					<Filter className="w-5 h-5" />
-				</button>
+				<div className="flex items-start gap-2 shrink-0">
+					{canAddVehicle ? (
+						<Link
+							to="/app/add"
+							className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm transition"
+						>
+							<PlusCircle className="w-5 h-5 shrink-0" aria-hidden />
+							Add new
+						</Link>
+					) : null}
+					<button
+						type="button"
+						onClick={() => {
+							setPendingPlateFilter((prev) => !prev);
+							setPage(1);
+						}}
+						className={`flex items-center gap-2 px-3 py-3 rounded-xl border transition-all whitespace-nowrap ${
+							pendingPlateFilter
+								? "bg-orange-500/15 border-orange-500/45 text-orange-300"
+								: "bg-zinc-800/50 border-zinc-700/80 text-zinc-400 hover:text-white hover:border-zinc-600"
+						}`}
+						title="Toggle: only vehicles still waiting on a registration plate"
+						aria-pressed={pendingPlateFilter}
+						aria-label="Filter pending number plate vehicles"
+					>
+						<CircleDashed className="w-5 h-5 shrink-0" aria-hidden />
+						<span className="hidden sm:inline text-sm font-medium max-w-[8.5rem] leading-tight text-left">
+							Pending plate
+						</span>
+					</button>
+					<button
+						type="button"
+						onClick={() => setFilterOpen(true)}
+						className={`p-3 rounded-xl border transition-all ${
+							hasActiveFilters
+								? "bg-amber-500/10 border-amber-500/40 text-amber-400"
+								: "bg-zinc-800/50 border-zinc-700/80 text-zinc-400 hover:text-white hover:border-zinc-600"
+						}`}
+						aria-label="Filter"
+					>
+						<Filter className="w-5 h-5" />
+					</button>
+				</div>
 			</div>
 
-			<div className="mb-4 flex items-center gap-4">
+			<div className="mb-4 flex flex-col sm:flex-row sm:flex-wrap gap-4 items-stretch sm:items-end">
+				<div className="flex-1 min-w-[200px] max-w-xl">
+					<label className="block text-xs text-zinc-500 mb-1">Search stock ID or plate</label>
+					<div className="relative">
+						<SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 pointer-events-none" />
+						<input
+							type="text"
+							value={searchQuery}
+							onChange={(e) => {
+								setSearchQuery(e.target.value);
+								setPage(1);
+							}}
+							placeholder="e.g. STK-102 or AB12 CDE"
+							className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
+							aria-label="Search by stock ID or plate number"
+						/>
+					</div>
+					<p className="text-[11px] text-zinc-600 mt-1">Also matches brand, model, and location from the filter panel.</p>
+				</div>
 				<div>
 					<label className="block text-xs text-zinc-500 mb-1">Max price (£)</label>
 					<input
@@ -320,7 +391,7 @@ export function VehicleList() {
 				</div>
 			</div>
 
-			<div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+			<div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide items-center">
 				<button
 					onClick={() => {
 						setBrandFilter("");
@@ -333,6 +404,23 @@ export function VehicleList() {
 					}`}
 				>
 					All
+				</button>
+				<button
+					type="button"
+					onClick={() => {
+						setPendingPlateFilter((p) => !p);
+						setPage(1);
+					}}
+					className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 border ${
+						pendingPlateFilter
+							? "bg-orange-500/15 border-orange-500/45 text-orange-300 shadow-sm shadow-orange-500/10"
+							: "bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/60"
+					}`}
+					title="Show only vehicles without a plate number saved"
+					aria-pressed={pendingPlateFilter}
+				>
+					<CircleDashed className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
+					Pending plate
 				</button>
 				{brandsLoading ? (
 					<div className="flex items-center gap-2 px-4 py-2.5 text-zinc-500 text-sm">
@@ -360,12 +448,7 @@ export function VehicleList() {
 			</div>
 
 			{loading ? (
-				<div className="flex flex-col items-center justify-center py-28">
-					<Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-4" />
-					<p className="text-zinc-500 text-sm font-medium">
-						Loading inventory...
-					</p>
-				</div>
+				<LoadingState message={inventoryLoadMessage} variant="embedded" className="py-28" />
 			) : vehicles.length === 0 ? (
 				<div className="text-center py-28 rounded-2xl border border-zinc-800/50 bg-zinc-900/40">
 					<div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-zinc-800/60 flex items-center justify-center">
@@ -469,7 +552,10 @@ export function VehicleList() {
 									<input
 										type="text"
 										value={searchQuery}
-										onChange={(e) => setSearchQuery(e.target.value)}
+										onChange={(e) => {
+											setSearchQuery(e.target.value);
+											setPage(1);
+										}}
 										placeholder="Stock ID, plate, brand, model..."
 										className="w-full pl-11 pr-4 py-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition"
 									/>
@@ -538,13 +624,37 @@ export function VehicleList() {
 									className="w-full px-4 py-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 text-white focus:ring-2 focus:ring-amber-500/40"
 								>
 									<option value="">All status</option>
-									<option value="available">Available</option>
+									<option value="available">Available (for sale)</option>
+									<option value="newly_arrived">Newly arrived</option>
 									<option value="sold">Sold</option>
 									<option value="reserved">Reserved</option>
 								</select>
 							</div>
 
-							{(searchQuery || brandFilter || modelFilter || statusFilter || maxPriceInput.trim()) && (
+							<label className="flex items-start gap-3 cursor-pointer group">
+								<input
+									type="checkbox"
+									checked={pendingPlateFilter}
+									onChange={(e) => {
+										setPendingPlateFilter(e.target.checked);
+										setPage(1);
+									}}
+									className="mt-1 rounded border-zinc-600 text-amber-500 focus:ring-amber-500/40 shrink-0"
+								/>
+								<span className="text-sm text-zinc-300 group-hover:text-white transition">
+									<span className="font-medium text-orange-300">Pending number plate only</span>
+									<span className="block text-zinc-500 text-xs mt-0.5 font-normal">
+										Stock rows with no plate saved yet (can combine with brand and status filters).
+									</span>
+								</span>
+							</label>
+
+							{(searchQuery ||
+								brandFilter ||
+								modelFilter ||
+								statusFilter ||
+								pendingPlateFilter ||
+								maxPriceInput.trim()) && (
 								<button
 									type="button"
 									onClick={clearFilters}

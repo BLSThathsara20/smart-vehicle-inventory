@@ -4,27 +4,25 @@ import { fetchVehicleById, normalizeVehicleWorkflowInstances } from '../lib/sani
 import { WorkPathInstancePanel } from '../components/WorkPathInstancePanel'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { ArrowLeft, Car, ExternalLink, Loader2 } from 'lucide-react'
-
-const placeholder =
-  'data:image/svg+xml,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect fill="%2327272a" width="400" height="300"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2371717a" font-family="system-ui" font-size="14">No image</text></svg>'
-  )
+import { ArrowLeft, Car, ExternalLink } from 'lucide-react'
+import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { LoadingState } from '../components/LoadingState'
 
 export function WorkItemDetail() {
   const { vehicleId, instanceId } = useParams()
   const navigate = useNavigate()
-  const { user, profile, hasPermission, isSuperAdmin } = useAuth()
+  const { user, profile, hasPermission, canEditWorkPath, isSuperAdmin } = useAuth()
   const { addNotification } = useNotification()
   const canEdit = hasPermission('inventory:edit')
-  const canManageWorkflows = hasPermission('workflows:manage')
+  const canManageWorkflows = canEditWorkPath()
   const [vehicle, setVehicle] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Loading vehicle…')
 
   const load = useCallback(async () => {
     if (!vehicleId) return
     setLoading(true)
+    setLoadMessage('Fetching vehicle…')
     try {
       const data = await fetchVehicleById(vehicleId)
       if (!data) throw new Error('Vehicle not found')
@@ -47,16 +45,11 @@ export function WorkItemDetail() {
     return list.find((x) => x.instance_id === instanceId) || null
   }, [vehicle, instanceId])
 
-  const primaryImage = vehicle?.images?.[0]?.url || placeholder
+  const primaryImage = vehicle?.images?.[0]?.url
   const showApplyBlock = canEdit && !vehicle?.sold
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24">
-        <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-        <p className="text-zinc-500 text-sm">Loading…</p>
-      </div>
-    )
+    return <LoadingState message={loadMessage} variant="embedded" className="py-24" />
   }
 
   if (!vehicle || !instance) {
@@ -92,7 +85,13 @@ export function WorkItemDetail() {
       <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 overflow-hidden">
         <div className="flex flex-col sm:flex-row gap-4 p-4">
           <div className="sm:w-36 shrink-0 aspect-[4/3] rounded-xl overflow-hidden border border-zinc-800">
-            <img src={primaryImage} alt="" className="w-full h-full object-cover" />
+            <LazyVehicleImage
+              src={primaryImage}
+              alt=""
+              className="w-full h-full"
+              imgClassName="object-cover"
+              priority
+            />
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex items-start gap-2">

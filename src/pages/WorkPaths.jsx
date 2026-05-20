@@ -11,13 +11,14 @@ import { APPLY_WHEN_OPTIONS, applyWhenLabel } from '../lib/workflowApplyRules'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { Route, Plus, Pencil, Trash2, Loader2, X, GripVertical } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 function emptyStep() {
   return { _key: `n${Date.now()}${Math.random().toString(36).slice(2, 7)}`, title: '', role_id: '', assignee_profile_id: '' }
 }
 
 export function WorkPaths() {
-  const { hasPermission, isSuperAdmin } = useAuth()
+  const { canAccessWorkPaths, canCreateWorkPath, canEditWorkPath } = useAuth()
   const { addNotification } = useNotification()
   const [paths, setPaths] = useState([])
   const [roles, setRoles] = useState([])
@@ -25,16 +26,23 @@ export function WorkPaths() {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
+  const [loadMessage, setLoadMessage] = useState('Loading work paths, roles, and people…')
 
-  const canManage = hasPermission('workflows:manage') || hasPermission('roles:manage') || isSuperAdmin()
+  const canViewPage = canAccessWorkPaths()
+  const canEditPaths = canEditWorkPath()
 
   useEffect(() => {
-    if (!canManage) return
+    if (!canViewPage) return
     load()
-  }, [canManage])
+  }, [canViewPage])
+
+  useEffect(() => {
+    if (!canEditPaths && deleteId) setDeleteId(null)
+  }, [canEditPaths, deleteId])
 
   async function load() {
     setLoading(true)
+    setLoadMessage('Loading work paths, roles, and people…')
     try {
       const [p, r, u] = await Promise.all([fetchAllWorkPaths(), fetchAllRoles(), fetchAllUserProfiles()])
       setPaths(p || [])
@@ -61,10 +69,10 @@ export function WorkPaths() {
     return m
   }, [roles, users])
 
-  if (!canManage) {
+  if (!canViewPage) {
     return (
       <div className="p-4">
-        <p className="text-zinc-400">You don&apos;t have permission to manage work paths.</p>
+        <p className="text-zinc-400">You don&apos;t have permission to view work paths.</p>
       </div>
     )
   }
@@ -78,37 +86,40 @@ export function WorkPaths() {
             Work paths
           </h1>
           <p className="text-zinc-500 text-sm mt-1">
-            Multi-step prep workflows: each step has a role and a specific assignee. Apply a path on a vehicle to
-            track handoffs automatically.
+            Multi-step prep workflows: each step has a role and assignee. Optional per-step checklists (text and photos)
+            are added when you assign a path to a vehicle. Templates can be edited anytime if your role allows it. If your
+            dataset is still empty, the app tries to add &quot;Standard pre-delivery prep&quot; after the first user profile exists
+            (Sanity Editor token + <code className="text-zinc-400">workPath</code> type in Studio).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            setModal({
-              id: null,
-              name: '',
-              description: '',
-              apply_when: 'always',
-              allow_step_overlap: false,
-              steps: [emptyStep(), emptyStep()],
-            })
-          }
-          className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-[15px] transition"
-        >
-          <Plus className="w-5 h-5" />
-          New work path
-        </button>
+        {canCreateWorkPath() ? (
+          <button
+            type="button"
+            onClick={() =>
+              setModal({
+                id: null,
+                name: '',
+                description: '',
+                apply_when: 'always',
+                allow_step_overlap: false,
+                steps: [emptyStep(), emptyStep()],
+              })
+            }
+            className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold text-[15px] transition"
+          >
+            <Plus className="w-5 h-5" />
+            New work path
+          </button>
+        ) : null}
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-          <p className="text-zinc-500 text-sm">Loading…</p>
-        </div>
+        <LoadingState message={loadMessage} variant="embedded" className="py-24" />
       ) : paths.length === 0 ? (
         <p className="text-zinc-500 text-sm py-12 text-center border border-dashed border-zinc-800 rounded-2xl">
-          No work paths yet. Create one to use on vehicles.
+          {canCreateWorkPath()
+            ? 'No work paths yet. Create one to use on vehicles.'
+            : 'No work paths yet. Ask an admin to create templates, or request edit access to manage them.'}
         </p>
       ) : (
         <div className="space-y-3">
@@ -147,38 +158,40 @@ export function WorkPaths() {
                   ))}
                 </ol>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setModal({
-                      id: p.id,
-                      name: p.name || '',
-                      description: p.description || '',
-                      apply_when: p.apply_when || 'always',
-                      allow_step_overlap: p.allow_step_overlap === true,
-                      steps: (p.steps || []).map((s) => ({
-                        _key: s._key,
-                        title: s.title || '',
-                        role_id: s.role_id || s.role?._id || '',
-                        assignee_profile_id: s.assignee_id || s.assignee?._id || '',
-                      })),
-                    })
-                  }
-                  className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                  aria-label="Edit"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteId(p.id)}
-                  className="p-2 rounded-lg hover:bg-red-500/20 text-zinc-400 hover:text-red-400"
-                  aria-label="Delete"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {canEditPaths ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setModal({
+                        id: p.id,
+                        name: p.name || '',
+                        description: p.description || '',
+                        apply_when: p.apply_when || 'always',
+                        allow_step_overlap: p.allow_step_overlap === true,
+                        steps: (p.steps || []).map((s) => ({
+                          _key: s._key,
+                          title: s.title || '',
+                          role_id: s.role_id || s.role?._id || '',
+                          assignee_profile_id: s.assignee_id || s.assignee?._id || '',
+                        })),
+                      })
+                    }
+                    className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                    aria-label="Edit"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteId(p.id)}
+                    className="p-2 rounded-lg hover:bg-red-500/20 text-zinc-400 hover:text-red-400"
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -191,6 +204,8 @@ export function WorkPaths() {
           roles={roles}
           usersByRole={usersByRole}
           allUsers={users}
+          canSaveCreate={canCreateWorkPath()}
+          canSaveEdit={canEditWorkPath()}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
@@ -200,7 +215,7 @@ export function WorkPaths() {
         />
       )}
 
-      {deleteId && (
+      {deleteId && canEditPaths ? (
         <DeleteWorkPathModal
           id={deleteId}
           onClose={() => setDeleteId(null)}
@@ -210,12 +225,22 @@ export function WorkPaths() {
           }}
           addNotification={addNotification}
         />
-      )}
+      ) : null}
     </div>
   )
 }
 
-function WorkPathModal({ initial, roles, usersByRole, allUsers, onClose, onSaved, addNotification }) {
+function WorkPathModal({
+  initial,
+  roles,
+  usersByRole,
+  allUsers,
+  canSaveCreate,
+  canSaveEdit,
+  onClose,
+  onSaved,
+  addNotification,
+}) {
   const [name, setName] = useState(initial.name)
   const [description, setDescription] = useState(initial.description)
   const [applyWhen, setApplyWhen] = useState(initial.apply_when || 'always')
@@ -248,6 +273,15 @@ function WorkPathModal({ initial, roles, usersByRole, allUsers, onClose, onSaved
 
   async function handleSubmit(e) {
     e.preventDefault()
+    const isEdit = Boolean(initial.id)
+    if (isEdit && !canSaveEdit) {
+      addNotification('You do not have permission to edit work paths', 'error')
+      return
+    }
+    if (!isEdit && !canSaveCreate) {
+      addNotification('You do not have permission to create work paths', 'error')
+      return
+    }
     if (!name.trim()) {
       addNotification('Name is required', 'error')
       return
@@ -286,6 +320,9 @@ function WorkPathModal({ initial, roles, usersByRole, allUsers, onClose, onSaved
       setSaving(false)
     }
   }
+
+  const isEditMode = Boolean(initial.id)
+  const canSubmit = isEditMode ? canSaveEdit : canSaveCreate
 
   return (
     <div
@@ -434,7 +471,7 @@ function WorkPathModal({ initial, roles, usersByRole, allUsers, onClose, onSaved
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !canSubmit}
               className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-semibold disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save'}

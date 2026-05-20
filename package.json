@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sanity:assign-role": "node scripts/sanity-assign-app-role.mjs"
   },
   "dependencies": {
     "@sanity/client": "^7.20.0",

@@ -3,7 +3,8 @@ import { hasFirebaseConfig } from '../lib/firebase'
 import { hasSanityConfig } from '../lib/sanity'
 import { sanityPing } from '../lib/sanityData'
 import { hasImgbbConfig } from '../lib/imgbb'
-import { Activity, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Activity, CheckCircle, XCircle } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 const StatusBadge = ({ ok, label }) => (
   <div className="flex items-center gap-2">
@@ -24,14 +25,17 @@ export function Health() {
     imgbb: false,
   })
   const [loading, setLoading] = useState(true)
+  const [loadMessage, setLoadMessage] = useState('Checking configuration…')
 
   useEffect(() => {
     const run = async () => {
+      setLoadMessage('Reading app configuration…')
       const fb = hasFirebaseConfig()
       const imgbb = hasImgbbConfig
       let san = false
       let sanityError = null
       if (hasSanityConfig) {
+        setLoadMessage('Verifying data connection…')
         const r = await sanityPing()
         san = r.ok
         sanityError = r.error
@@ -53,9 +57,13 @@ export function Health() {
       </h1>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-        </div>
+        <LoadingState
+          message={loadMessage}
+          variant="embedded"
+          className="py-12"
+          spinnerClassName="text-orange-500"
+          messageClassName="text-slate-400"
+        />
       ) : (
         <div className="space-y-4">
           <div

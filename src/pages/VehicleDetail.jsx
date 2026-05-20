@@ -1,34 +1,118 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   fetchVehicleById,
   patchVehicleFields,
   deleteVehicle,
   fetchSimilarVehiclesPool,
+  normalizeVehicleWorkflowInstances,
 } from '../lib/sanityData'
-import { downloadSingleVehiclePdf } from '../lib/exportSingleVehiclePdf'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { VehicleCard } from '../components/VehicleCard'
 import { getSimilarVehicles } from '../lib/similarVehicles'
-import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, FileText, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown } from 'lucide-react'
+import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { VehiclePhotoGalleryModal } from '../components/VehiclePhotoGalleryModal'
+import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
 import { ReservationWorkflow } from '../components/ReservationWorkflow'
+import { PdiReservationPanel } from '../components/PdiReservationPanel'
 import { VehicleOpsWorkflow } from '../components/VehicleOpsWorkflow'
+import { ViewingBookingsModal } from '../components/ViewingBookingsModal'
 import { ReserveModal } from '../components/ReserveModal'
 import { DETAIL_SECTIONS } from '../lib/vehicleDetailFields'
+import { isNewlyArrivedStatus } from '../lib/vehicleStatus'
+
+function HeroImageStack({ primaryImage, vehicle, isReserved, isSold, isAvailable, isNewShipment, galleryCount }) {
+  return (
+    <div className="aspect-[4/3] relative overflow-hidden">
+      <LazyVehicleImage
+        src={primaryImage}
+        alt={`${vehicle.brand} ${vehicle.model}`}
+        className="absolute inset-0 w-full h-full"
+        imgClassName={isReserved ? 'opacity-90' : isSold ? 'opacity-80' : ''}
+        priority
+      />
+      {isNewShipment && (
+        <div className="absolute inset-0 bg-cyan-950/15 pointer-events-none" aria-hidden />
+      )}
+      {isReserved && (
+        <div className="absolute inset-0 bg-amber-950/20 pointer-events-none" aria-hidden />
+      )}
+      {isSold && <div className="absolute inset-0 bg-rose-950/25 pointer-events-none" aria-hidden />}
+      {isNewShipment && (
+        <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
+          <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-cyan-500/95 text-zinc-950 text-[10px] font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
+            New shipment
+          </div>
+        </div>
+      )}
+      {isReserved && (
+        <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
+          <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-amber-500/95 text-zinc-950 text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
+            Reserved
+          </div>
+        </div>
+      )}
+      {isSold && (
+        <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
+          <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-rose-600/95 text-white text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
+            Sold
+          </div>
+        </div>
+      )}
+      {isAvailable && !isNewShipment && (
+        <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
+          <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-emerald-500/95 text-zinc-950 text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
+            Available
+          </div>
+        </div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute top-4 left-4 flex gap-2">
+        {isSold && (
+          <span className="px-3 py-1.5 rounded-xl text-sm font-medium bg-rose-600/90 text-white flex items-center gap-1.5">
+            <CheckCircle className="w-4 h-4" /> Sold
+          </span>
+        )}
+        {isReserved && (
+          <span className="px-3 py-1.5 rounded-xl text-sm font-medium bg-amber-600/90 text-white flex items-center gap-1.5">
+            <Lock className="w-4 h-4" /> Reserved
+          </span>
+        )}
+        {isNewShipment && (
+          <span className="px-3 py-1.5 rounded-xl text-sm font-medium bg-cyan-600/90 text-white flex items-center gap-1.5">
+            <Package className="w-4 h-4" /> New shipment
+          </span>
+        )}
+        <span className="px-3 py-1.5 rounded-xl text-sm font-mono bg-zinc-900/90 text-amber-400">
+          #{vehicle.stock_id}
+        </span>
+      </div>
+      {galleryCount > 0 && (
+        <div className="absolute bottom-3 right-3 z-20 pointer-events-none flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/60 text-white text-[11px] font-medium backdrop-blur-sm border border-white/10">
+          <Images className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            {galleryCount} photo{galleryCount === 1 ? '' : 's'} · tap to view
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function VehicleDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, profile, hasPermission, isSuperAdmin } = useAuth()
+  const { user, profile, hasPermission, canEditWorkPath } = useAuth()
   const { addNotification } = useNotification()
   const canEdit = hasPermission('inventory:edit')
+  const canViewInventory = hasPermission('inventory:view')
   const canDelete = hasPermission('inventory:delete')
-  const canManageWorkflows = hasPermission('workflows:manage')
-  const canManageRoles = hasPermission('roles:manage')
+  const canManageWorkflows = canEditWorkPath()
   const [vehicle, setVehicle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -38,16 +122,39 @@ export function VehicleDetail() {
   const [generatingLink, setGeneratingLink] = useState(false)
   const [reserveOpen, setReserveOpen] = useState(false)
   const [editForReservationDetails, setEditForReservationDetails] = useState(false)
-  const [pdfAddOpen, setPdfAddOpen] = useState(false)
-  const [newPdfLabel, setNewPdfLabel] = useState('')
-  const [newPdfUrl, setNewPdfUrl] = useState('')
-  const [pdfBusy, setPdfBusy] = useState(false)
-  const [summaryPdfLoading, setSummaryPdfLoading] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [viewingsOpen, setViewingsOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
+  const [detailLoadMessage, setDetailLoadMessage] = useState('Fetching vehicle…')
+  const [similarLoadMessage, setSimilarLoadMessage] = useState(
+    'Loading other vehicles for comparison…'
+  )
+  const [markingAvailable, setMarkingAvailable] = useState(false)
 
   useEffect(() => {
-    fetchVehicle()
     setSimilarOpen(false)
-  }, [id])
+    setVehicle(null)
+    setLoading(true)
+
+    async function initialLoad() {
+      const loadId = id
+      setDetailLoadMessage('Fetching vehicle…')
+      try {
+        const data = await fetchVehicleById(loadId)
+        if (loadId !== id) return
+        if (!data) throw new Error('Not found')
+        setVehicle(data)
+      } catch (err) {
+        if (loadId !== id) return
+        addNotification(err.message || 'Vehicle not found', 'error')
+        navigate(user ? '/app' : '/find')
+      } finally {
+        if (loadId === id) setLoading(false)
+      }
+    }
+
+    initialLoad()
+  }, [id, user, navigate, addNotification])
 
   useEffect(() => {
     if (vehicle && canEdit && searchParams.get('reserve') === '1' && !vehicle.reserved && !vehicle.sold) {
@@ -64,28 +171,45 @@ export function VehicleDetail() {
     }
   }, [vehicle, canEdit, searchParams])
 
-  async function fetchVehicle() {
+  useEffect(() => {
+    if (!vehicle) return
+    if (searchParams.get('viewings') === '1') {
+      const next = new URLSearchParams(searchParams)
+      next.delete('viewings')
+      setSearchParams(next, { replace: true })
+      if (!vehicle.reserved) setViewingsOpen(true)
+    }
+  }, [vehicle, searchParams, setSearchParams])
+
+  async function refreshVehicle() {
+    const loadId = id
+    setDetailLoadMessage('Refreshing…')
     try {
-      const data = await fetchVehicleById(id)
+      const data = await fetchVehicleById(loadId)
+      if (loadId !== id) return
       if (!data) throw new Error('Not found')
       setVehicle(data)
     } catch (err) {
+      if (loadId !== id) return
       addNotification(err.message || 'Vehicle not found', 'error')
       navigate(user ? '/app' : '/find')
-    } finally {
-      setLoading(false)
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
-        <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-        <p className="text-zinc-500 text-sm">Loading...</p>
+      <div className="min-h-screen bg-zinc-950">
+        <LoadingState message={detailLoadMessage} variant="fullscreen" />
       </div>
     )
   }
-  if (!vehicle) return null
+  if (!vehicle) {
+    return (
+      <div className="min-h-screen bg-zinc-950">
+        <LoadingState message="Opening vehicle…" variant="fullscreen" />
+      </div>
+    )
+  }
 
   function generatePickupToken() {
     return crypto.randomUUID().replace(/-/g, '').slice(0, 12)
@@ -98,11 +222,25 @@ export function VehicleDetail() {
       const token = generatePickupToken()
       await patchVehicleFields(vehicle.id, { pickup_token: token })
       addNotification('Customer link generated', 'success')
-      fetchVehicle()
+      refreshVehicle()
     } catch (err) {
       addNotification(err.message || 'Failed to generate link', 'error')
     } finally {
       setGeneratingLink(false)
+    }
+  }
+
+  async function handleMarkAvailableFromShipment() {
+    if (!canEdit || !vehicle?.id || !isNewlyArrivedStatus(vehicle)) return
+    setMarkingAvailable(true)
+    try {
+      await patchVehicleFields(vehicle.id, { vehicle_status: 'Available' })
+      addNotification('Vehicle marked as available', 'success')
+      await refreshVehicle()
+    } catch (err) {
+      addNotification(err.message || 'Could not update status', 'error')
+    } finally {
+      setMarkingAvailable(false)
     }
   }
 
@@ -128,63 +266,14 @@ export function VehicleDetail() {
     }
   }
 
-  function canDeletePdfAttachment(att) {
-    if (!user?.uid || !att) return false
-    return att.created_by_uid === user.uid || isSuperAdmin() || canManageRoles
-  }
-
-  async function addPdfAttachment(e) {
-    e.preventDefault()
-    const url = newPdfUrl.trim()
-    if (!url || !vehicle?.id || !user?.uid) {
-      addNotification('URL is required', 'error')
-      return
-    }
-    setPdfBusy(true)
-    try {
-      const row = {
-        _key: crypto.randomUUID().replace(/-/g, '').slice(0, 12),
-        url,
-        label: newPdfLabel.trim() || 'Document',
-        created_by_uid: user.uid,
-        created_at: new Date().toISOString(),
-      }
-      const list = [...(vehicle.pdf_attachments || []), row]
-      await patchVehicleFields(vehicle.id, { pdf_attachments: list })
-      addNotification('Document link saved', 'success')
-      setNewPdfLabel('')
-      setNewPdfUrl('')
-      setPdfAddOpen(false)
-      fetchVehicle()
-    } catch (err) {
-      addNotification(err.message || 'Could not save', 'error')
-    } finally {
-      setPdfBusy(false)
-    }
-  }
-
-  async function removePdfAttachment(key) {
-    if (!vehicle?.id || !key) return
-    if (!confirm('Remove this document link?')) return
-    setPdfBusy(true)
-    try {
-      const list = (vehicle.pdf_attachments || []).filter((a) => a._key !== key)
-      await patchVehicleFields(vehicle.id, { pdf_attachments: list })
-      addNotification('Document removed', 'success')
-      fetchVehicle()
-    } catch (err) {
-      addNotification(err.message || 'Could not remove', 'error')
-    } finally {
-      setPdfBusy(false)
-    }
-  }
-
   async function fetchSimilarOptions() {
     setSimilarOpen(true)
     setSimilarLoading(true)
     setSimilarVehicles([])
+    setSimilarLoadMessage('Loading other vehicles for comparison…')
     try {
       const withUrls = await fetchSimilarVehiclesPool(id)
+      setSimilarLoadMessage('Picking similar vehicles from loaded stock…')
       const similar = getSimilarVehicles(vehicle, withUrls, 12)
       setSimilarVehicles(similar)
     } catch (err) {
@@ -207,7 +296,7 @@ export function VehicleDetail() {
           <h1 className="text-xl font-bold text-white mb-6 tracking-tight">Edit Vehicle</h1>
           <VehicleForm
             vehicle={vehicle}
-            onSuccess={() => { setEditing(false); setEditForReservationDetails(false); fetchVehicle(); }}
+            onSuccess={() => { setEditing(false); setEditForReservationDetails(false); refreshVehicle(); }}
             initialOpenSale={editForReservationDetails}
           />
         </main>
@@ -216,10 +305,21 @@ export function VehicleDetail() {
   }
 
   const primaryImage = vehicle.images?.[0]?.url
-  const placeholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23171717" width="400" height="300"/%3E%3Ctext fill="%23525252" x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-size="24"%3ECar%3C/text%3E%3C/svg%3E'
+  const galleryImages = vehicle.images || []
+  const hasGallery = galleryImages.length > 0
   const isReserved = vehicle.reserved && !vehicle.sold
   const isSold = vehicle.sold
-  const isAvailable = !isSold && !isReserved
+  const isNewlyArrived = isNewlyArrivedStatus(vehicle)
+  const isAvailable = !isSold && !isReserved && !isNewlyArrived
+  const isNewShipment = isNewlyArrived && !isReserved && !isSold
+  const scheduledViewingCount = (vehicle.viewing_bookings || []).filter(
+    (b) => (b.status || 'scheduled') === 'scheduled'
+  ).length
+  const showViewingsEntry = canViewInventory && !isReserved
+  const workflowInstanceCount = normalizeVehicleWorkflowInstances(vehicle).length
+  const showCollectionReport =
+    canViewInventory &&
+    (isReserved || workflowInstanceCount > 0 || Boolean(vehicle.planned_collection_date))
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -232,27 +332,71 @@ export function VehicleDetail() {
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
-            {canEdit && (
-              <div className="flex gap-2">
-                {isAvailable && (
+            {(canEdit || showViewingsEntry) && (
+              <div className="flex flex-wrap gap-2 justify-end">
+                {showViewingsEntry && (
                   <button
-                    onClick={() => setReserveOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 hover:border-amber-500/50 font-medium transition"
+                    type="button"
+                    onClick={() => setViewingsOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500/15 border border-sky-500/35 text-sky-400 hover:bg-sky-500/25 font-medium transition"
                   >
-                    <Lock className="w-4 h-4" />
-                    Reserve
+                    <CalendarClock className="w-4 h-4" />
+                    Viewings
+                    {scheduledViewingCount > 0 ? (
+                      <span className="tabular-nums text-xs opacity-90">({scheduledViewingCount})</span>
+                    ) : null}
                   </button>
                 )}
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-medium transition"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Edit
-                </button>
+                {canEdit && (
+                  <>
+                    {isAvailable && (
+                      <button
+                        onClick={() => setReserveOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 hover:border-amber-500/50 font-medium transition"
+                      >
+                        <Lock className="w-4 h-4" />
+                        Reserve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-medium transition"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
+
+          {isNewShipment && (
+            <div className="mb-6 relative group/newship z-30 inline-block max-w-full">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium bg-cyan-600/90 text-white cursor-help shadow-sm border border-cyan-400/30">
+                <Package className="w-4 h-4 shrink-0" />
+                New shipment
+              </span>
+              <div className="absolute left-0 top-full pt-2 opacity-0 invisible pointer-events-none group-hover/newship:opacity-100 group-hover/newship:visible group-hover/newship:pointer-events-auto transition-opacity duration-150">
+                <div className="w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-cyan-500/35 bg-zinc-900/95 backdrop-blur-md shadow-xl px-3.5 py-3 text-left">
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    This unit is still being prepared. When it is ready for sale, set status to{' '}
+                    <span className="text-emerald-400 font-medium">Available</span>.
+                  </p>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={handleMarkAvailableFromShipment}
+                      disabled={markingAvailable}
+                      className="mt-3 w-full sm:w-auto px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition"
+                    >
+                      {markingAvailable ? 'Updating…' : 'Mark as Available'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
 
           {isReserved && (
             <>
@@ -269,29 +413,26 @@ export function VehicleDetail() {
                           {vehicle.customer_phone && ` · ${vehicle.customer_phone}`}
                         </p>
                       )}
-                      {Array.isArray(vehicle.reservation_conditions) &&
-                        vehicle.reservation_conditions.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-amber-500/20">
-                            <p className="text-[10px] font-medium text-amber-400/80 uppercase tracking-wider mb-1.5">
-                              Conditions at reservation
-                            </p>
-                            <ul className="text-xs text-amber-400/95 space-y-1 list-disc list-inside">
-                              {vehicle.reservation_conditions.map((x, i) => {
-                                const t = typeof x === 'string' ? x : x?.text
-                                return t ? <li key={x?._key || i}>{t}</li> : null
-                              })}
-                            </ul>
-                          </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => { setEditForReservationDetails(true); setEditing(true); }}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500/30 hover:bg-amber-500/40 text-amber-400 text-sm font-medium border border-amber-500/40"
+                          >
+                            {!vehicle.customer_name && !vehicle.customer_email && !vehicle.customer_phone ? 'Add reservation details' : 'Edit reservation details'}
+                          </button>
                         )}
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => { setEditForReservationDetails(true); setEditing(true); }}
-                          className="mt-3 px-3 py-1.5 rounded-lg bg-amber-500/30 hover:bg-amber-500/40 text-amber-400 text-sm font-medium border border-amber-500/40"
-                        >
-                          {!vehicle.customer_name && !vehicle.customer_email && !vehicle.customer_phone ? 'Add reservation details' : 'Edit reservation details'}
-                        </button>
-                      )}
+                        {showCollectionReport && (
+                          <Link
+                            to={`/app/collection/${vehicle.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 text-amber-200 text-sm font-medium border border-amber-500/25"
+                          >
+                            <FileDown className="w-4 h-4 shrink-0" />
+                            Pulout &amp; prep report
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -325,8 +466,16 @@ export function VehicleDetail() {
                 </div>
               </div>
               <div className="mb-8">
-                <ReservationWorkflow vehicleId={vehicle.id} vehicle={vehicle} canEdit={canEdit} onUpdate={fetchVehicle} />
+                <ReservationWorkflow vehicleId={vehicle.id} vehicle={vehicle} canEdit={canEdit} onUpdate={refreshVehicle} />
               </div>
+              <PdiReservationPanel
+                vehicle={vehicle}
+                user={user}
+                profile={profile}
+                canEdit={canEdit}
+                canViewInventory={canViewInventory}
+                onUpdated={refreshVehicle}
+              />
             </>
           )}
 
@@ -350,69 +499,104 @@ export function VehicleDetail() {
           )}
 
           <div className="mb-6">
+            {showCollectionReport && !isReserved && (
+              <div className="mb-3 flex flex-wrap justify-end">
+                <Link
+                  to={`/app/collection/${vehicle.id}`}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800/90 border border-zinc-700 text-zinc-200 text-sm font-medium hover:bg-zinc-700/90 transition"
+                >
+                  <FileDown className="w-4 h-4 shrink-0 text-amber-400" />
+                  Pulout &amp; prep report (PDF)
+                </Link>
+              </div>
+            )}
             <VehicleOpsWorkflow
               vehicle={vehicle}
               currentUid={user?.uid}
               currentDisplayName={profile?.display_name || user?.displayName || user?.email || ''}
-              onUpdate={fetchVehicle}
+              onUpdate={refreshVehicle}
               canApply={canEdit && !vehicle.sold}
               canManageWorkflows={canManageWorkflows}
             />
           </div>
 
           <div className={`rounded-2xl overflow-hidden mb-6 ${
-            isSold ? 'bg-rose-950/20 border-2 border-rose-500/30' : isReserved ? 'bg-amber-950/20 border-2 border-amber-500/30' : 'bg-zinc-900/50 border border-zinc-800/60'
+            isSold
+              ? 'bg-rose-950/20 border-2 border-rose-500/30'
+              : isReserved
+                ? 'bg-amber-950/20 border-2 border-amber-500/30'
+                : isNewShipment
+                  ? 'bg-cyan-950/15 border-2 border-cyan-500/25'
+                  : 'bg-zinc-900/50 border border-zinc-800/60'
           }`}>
-            <div className="aspect-[4/3] relative overflow-hidden">
-              <img
-                src={primaryImage || placeholder}
-                alt={`${vehicle.brand} ${vehicle.model}`}
-                className={`w-full h-full object-cover ${isReserved ? 'opacity-90' : isSold ? 'opacity-80' : ''}`}
-              />
-              {isReserved && (
-                <div className="absolute inset-0 bg-amber-950/20 pointer-events-none" aria-hidden />
-              )}
-              {isSold && (
-                <div className="absolute inset-0 bg-rose-950/25 pointer-events-none" aria-hidden />
-              )}
-              {isReserved && (
-                <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
-                  <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-amber-500/95 text-zinc-950 text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
-                    Reserved
-                  </div>
-                </div>
-              )}
-              {isSold && (
-                <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
-                  <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-rose-600/95 text-white text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
-                    Sold
-                  </div>
-                </div>
-              )}
-              {isAvailable && (
-                <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden pointer-events-none">
-                  <div className="absolute top-5 right-[-2.5rem] rotate-45 bg-emerald-500/95 text-zinc-950 text-xs font-bold uppercase tracking-wider py-1.5 px-10 shadow-md">
-                    Available
-                  </div>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute top-4 left-4 flex gap-2">
-                {isSold && (
-                  <span className="px-3 py-1.5 rounded-xl text-sm font-medium bg-rose-600/90 text-white flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4" /> Sold
-                  </span>
-                )}
-                {isReserved && (
-                  <span className="px-3 py-1.5 rounded-xl text-sm font-medium bg-amber-600/90 text-white flex items-center gap-1.5">
-                    <Lock className="w-4 h-4" /> Reserved
-                  </span>
-                )}
-                <span className="px-3 py-1.5 rounded-xl text-sm font-mono bg-zinc-900/90 text-amber-400">
-                  #{vehicle.stock_id}
-                </span>
+            {hasGallery ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setGalleryIndex(0)
+                  setGalleryOpen(true)
+                }}
+                className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 rounded-t-2xl"
+                aria-label={`Open photo gallery, ${galleryImages.length} photos`}
+              >
+                <HeroImageStack
+                  primaryImage={primaryImage}
+                  vehicle={vehicle}
+                  isReserved={isReserved}
+                  isSold={isSold}
+                  isAvailable={isAvailable}
+                  isNewShipment={isNewShipment}
+                  galleryCount={galleryImages.length}
+                />
+              </button>
+            ) : (
+              <div className="rounded-t-2xl">
+                <HeroImageStack
+                  primaryImage={primaryImage}
+                  vehicle={vehicle}
+                  isReserved={isReserved}
+                  isSold={isSold}
+                  isAvailable={isAvailable}
+                  isNewShipment={isNewShipment}
+                  galleryCount={0}
+                />
               </div>
-            </div>
+            )}
+            {galleryImages.length > 1 && (
+              <div className="flex gap-2 px-2 py-2 overflow-x-auto border-t border-zinc-800/60 bg-zinc-900/40">
+                {galleryImages.map((img, i) => (
+                  <button
+                    key={img.id || img.url || i}
+                    type="button"
+                    onClick={() => {
+                      setGalleryIndex(i)
+                      setGalleryOpen(true)
+                    }}
+                    className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition ${
+                      i === 0 ? 'border-amber-500/60' : 'border-zinc-700 hover:border-zinc-500'
+                    }`}
+                    aria-label={`Open gallery at photo ${i + 1}`}
+                  >
+                    <LazyVehicleImage src={img.url} alt="" className="w-full h-full" imgClassName="object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+            {hasGallery && (
+              <div className="px-3 py-2.5 border-t border-zinc-800/60 bg-zinc-900/30 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGalleryIndex(0)
+                    setGalleryOpen(true)
+                  }}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-amber-400 hover:text-amber-300"
+                >
+                  <Images className="w-4 h-4" />
+                  View all {galleryImages.length} photo{galleryImages.length === 1 ? '' : 's'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mb-6">
@@ -434,116 +618,6 @@ export function VehicleDetail() {
             </div>
           </div>
 
-          <div className="mb-8 rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-4 py-3 border-b border-zinc-800/60 bg-zinc-900/80 flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5 text-amber-500/90" aria-hidden />
-              Documents and PDF
-            </h3>
-            <div className="p-4 space-y-3">
-              <button
-                type="button"
-                disabled={summaryPdfLoading}
-                onClick={async () => {
-                  setSummaryPdfLoading(true)
-                  try {
-                    await downloadSingleVehiclePdf(vehicle)
-                    addNotification('PDF downloaded', 'success')
-                  } catch (err) {
-                    addNotification(err?.message || 'Could not create PDF (check logo access)', 'error')
-                  } finally {
-                    setSummaryPdfLoading(false)
-                  }
-                }}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-sm font-medium hover:bg-amber-500/25 disabled:opacity-50"
-              >
-                <FileText className="w-4 h-4 shrink-0" />
-                {summaryPdfLoading ? 'Preparing PDF…' : 'Download vehicle summary (PDF)'}
-              </button>
-              {(vehicle.pdf_attachments || []).length > 0 && (
-                <ul className="space-y-2">
-                  {(vehicle.pdf_attachments || []).map((att) => (
-                    <li
-                      key={att._key || att.url}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-2"
-                    >
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-amber-400 hover:text-amber-300 underline truncate flex-1 min-w-0"
-                      >
-                        {att.label || 'Document'}
-                      </a>
-                      {canDeletePdfAttachment(att) && (
-                        <button
-                          type="button"
-                          onClick={() => removePdfAttachment(att._key)}
-                          disabled={pdfBusy}
-                          className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-                          title="Remove link"
-                          aria-label="Remove document link"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {canEdit && (
-                <>
-                  {!pdfAddOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => setPdfAddOpen(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-zinc-600 text-sm text-zinc-400 hover:text-amber-400 hover:border-amber-500/40"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add hosted PDF or document link
-                    </button>
-                  ) : (
-                    <form onSubmit={addPdfAttachment} className="space-y-2 rounded-lg border border-zinc-700/60 p-3 bg-zinc-800/30">
-                      <input
-                        type="text"
-                        value={newPdfLabel}
-                        onChange={(e) => setNewPdfLabel(e.target.value)}
-                        placeholder="Label (e.g. Sales agreement)"
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm"
-                      />
-                      <input
-                        type="url"
-                        required
-                        value={newPdfUrl}
-                        onChange={(e) => setNewPdfUrl(e.target.value)}
-                        placeholder="https://…"
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="submit"
-                          disabled={pdfBusy}
-                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-zinc-950 text-sm font-medium disabled:opacity-50"
-                        >
-                          {pdfBusy ? 'Saving…' : 'Save link'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setPdfAddOpen(false); setNewPdfLabel(''); setNewPdfUrl('') }}
-                          className="px-4 py-2 rounded-lg border border-zinc-600 text-zinc-400 text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </>
-              )}
-              <p className="text-[10px] text-zinc-600 leading-relaxed">
-                Use links to files you host (Drive, Dropbox, etc.). Only the person who added a link, super admins, or users who manage roles can remove it.
-              </p>
-            </div>
-          </div>
-
           <div className="mb-8 space-y-6">
             {DETAIL_SECTIONS.map((section) => (
               <div key={section.title} className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
@@ -551,16 +625,23 @@ export function VehicleDetail() {
                   {section.title}
                 </h3>
                 <div className="grid grid-cols-2 gap-3 p-4">
-                  {section.fields.map(({ key, label, format, isUrl, colSpan }) => {
+                  {section.fields.map(({ key, label, format, isUrl, pendingWhenEmpty }) => {
                     const value = vehicle[key]
-                    const display = format(value)
+                    const pendingPlateMissing =
+                      pendingWhenEmpty &&
+                      (value == null || (typeof value === 'string' && value.trim() === ''))
+                    const display = pendingPlateMissing ? 'Pending number plate' : format(value)
                     const isEmpty = display === 'Not added'
                     return (
                       <div
                         key={key}
                         className={`p-3 rounded-lg border ${
-                          isEmpty ? 'bg-zinc-800/30 border-zinc-700/50' : 'bg-zinc-800/20 border-zinc-700/60'
-                        } ${colSpan === 2 ? 'col-span-2' : ''}`}
+                          pendingPlateMissing
+                            ? 'bg-orange-950/25 border-orange-500/35'
+                            : isEmpty
+                              ? 'bg-zinc-800/30 border-zinc-700/50'
+                              : 'bg-zinc-800/20 border-zinc-700/60'
+                        }`}
                       >
                         <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1">{label}</p>
                         {isUrl && value ? (
@@ -568,7 +649,17 @@ export function VehicleDetail() {
                             View agreement
                           </a>
                         ) : (
-                          <p className={`text-sm ${isEmpty ? 'text-zinc-500 italic' : 'text-zinc-300'}`}>{display}</p>
+                          <p
+                            className={`text-sm ${
+                              pendingPlateMissing
+                                ? 'text-orange-300 font-medium'
+                                : isEmpty
+                                  ? 'text-zinc-500 italic'
+                                  : 'text-zinc-300'
+                            }`}
+                          >
+                            {display}
+                          </p>
                         )}
                       </div>
                     )
@@ -589,20 +680,16 @@ export function VehicleDetail() {
             <div className="mb-8">
               <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Features</h3>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(vehicle.features).map(([k, v]) => {
-                  const label = typeof v === 'string' && v.trim() ? v.trim() : k.replace(/_/g, ' ')
-                  const on = v === true || (typeof v === 'string' && v.trim() !== '')
-                  return (
-                    <span
-                      key={k}
-                      className={`px-3 py-1.5 rounded-xl text-sm ${
-                        on ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/60'
-                      }`}
-                    >
-                      {label}
-                    </span>
-                  )
-                })}
+                {Object.entries(vehicle.features).map(([k, v]) => (
+                  <span
+                    key={k}
+                    className={`px-3 py-1.5 rounded-xl text-sm ${
+                      v ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/60'
+                    }`}
+                  >
+                    {k}: {String(v)}
+                  </span>
+                ))}
               </div>
             </div>
           )}
@@ -647,10 +734,7 @@ export function VehicleDetail() {
               </div>
               <div className="flex-1 overflow-y-auto p-5">
                 {similarLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16">
-                    <Loader2 className="w-10 h-10 text-amber-500/80 animate-spin mb-3" />
-                    <p className="text-zinc-500 text-sm">Finding similar vehicles...</p>
-                  </div>
+                  <LoadingState message={similarLoadMessage} variant="embedded" className="py-16" />
                 ) : similarVehicles.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-zinc-800/80 flex items-center justify-center">
@@ -679,10 +763,28 @@ export function VehicleDetail() {
             onClose={() => setReserveOpen(false)}
             onSuccess={() => {
               addNotification('Vehicle reserved', 'success')
-              fetchVehicle()
+              refreshVehicle()
             }}
           />
         )}
+
+        <ViewingBookingsModal
+          open={viewingsOpen}
+          onClose={() => setViewingsOpen(false)}
+          vehicle={vehicle}
+          canEdit={canEdit}
+          currentUid={user?.uid}
+          currentDisplayName={profile?.display_name || user?.displayName || user?.email || ''}
+          onUpdate={refreshVehicle}
+        />
+
+        <VehiclePhotoGalleryModal
+          open={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          images={galleryImages}
+          title={`${vehicle.brand} ${vehicle.model}`}
+          initialIndex={galleryIndex}
+        />
 
         <Footer />
       </main>

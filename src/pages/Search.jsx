@@ -13,6 +13,7 @@ import { VehicleCard } from '../components/VehicleCard'
 import { CameraCapture } from '../components/CameraCapture'
 import { Link } from 'react-router-dom'
 import { Search as SearchIcon, Camera, QrCode, X, Package, Lock, CheckCircle, PoundSterling, ShoppingBag, ChevronRight } from 'lucide-react'
+import { LoadingState } from '../components/LoadingState'
 
 const findPageUrl = () => `${window.location.origin}/find`
 
@@ -20,6 +21,7 @@ export function Search() {
   const [query, setQuery] = useState('')
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(false)
+  const [searchLoadMessage, setSearchLoadMessage] = useState('Searching inventory…')
   const [brandFilter, setBrandFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
   const [maxPriceInput, setMaxPriceInput] = useState('')
@@ -88,6 +90,7 @@ export function Search() {
 
   async function searchVehicles() {
     setLoading(true)
+    setSearchLoadMessage('Searching inventory with your filters…')
     try {
       const withUrls = await fetchVehiclesForList({
         search: query.trim() || undefined,
@@ -115,6 +118,7 @@ export function Search() {
     const q = text.trim()
     setQuery(q)
     setLoading(true)
+    setSearchLoadMessage('Looking up plate or stock ID…')
     try {
       const withUrls = await fetchVehiclesByPlateOrStock(q)
       const counts = {}
@@ -319,9 +323,7 @@ export function Search() {
       {/* Results */}
       <div className="flex-1">
         {loading && (
-          <div className="flex justify-center py-16">
-            <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <LoadingState message={searchLoadMessage} variant="embedded" className="py-16" />
         )}
 
         {!loading && !shouldSearch && (

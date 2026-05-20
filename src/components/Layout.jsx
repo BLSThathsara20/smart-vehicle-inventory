@@ -3,10 +3,12 @@ import { BottomNav } from './BottomNav'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
 import { NotificationBell } from './NotificationBell'
+import { BrowserNotificationManager } from './BrowserNotificationManager'
 
 export function Layout() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white md:flex">
+      <BrowserNotificationManager />
       <Sidebar />
       <div className="flex-1 md:pl-56 min-h-screen flex flex-col relative">
         <div className="absolute top-3 right-3 md:top-4 md:right-6 z-40 print:hidden">

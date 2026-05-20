@@ -1,11 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3 } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, ContactRound } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ASAHI_LOGO_URL, ASAHI_BRAND_NAME, ASAHI_PRODUCT_TITLE } from '../constants/branding'
 
 const mainNavItems = [
   { to: '/app', icon: LayoutGrid, label: 'Overview', permission: 'search:view' },
   { to: '/app/inventory', icon: Car, label: 'Inventory', permission: 'inventory:view' },
+  { to: '/app/customers', icon: ContactRound, label: 'Customers', permission: 'inventory:view' },
+  { to: '/app/viewings', icon: CalendarClock, label: 'Viewings', permission: 'inventory:view' },
   { to: '/app/analytics', icon: BarChart3, label: 'Analytics', permission: 'analytics:view' },
   { to: '/app/my-work', icon: ClipboardList, label: 'My work', permission: 'inventory:view' },
   { to: '/app/add', icon: PlusCircle, label: 'Add Vehicle', permission: 'inventory:add' },
@@ -17,17 +19,19 @@ const secondaryNavItems = [
   { to: '/app/space', icon: HardDrive, label: 'Storage & Space', permission: 'space:view' },
   { to: '/app/roles', icon: Shield, label: 'Roles & Permissions', permission: 'roles:manage' },
   { to: '/app/users', icon: UsersIcon, label: 'Users', permission: 'users:manage' },
-  { to: '/app/work-paths', icon: Route, label: 'Work paths', permission: 'workflows:manage' },
+  { to: '/app/work-paths', icon: Route, label: 'Work paths', workPathNav: true },
   { to: '/app/settings', icon: Settings, label: 'Settings', permission: 'settings:view' },
 ]
 
 export function Sidebar() {
   const location = useLocation()
-  const { hasPermission } = useAuth()
+  const { hasPermission, canAccessWorkPaths } = useAuth()
   const isOverviewActive = location.pathname === '/app' || location.pathname === '/app/search'
 
   const filteredMain = mainNavItems.filter((item) => !item.permission || hasPermission(item.permission))
-  const filteredSecondary = secondaryNavItems.filter((item) => !item.permission || hasPermission(item.permission))
+  const filteredSecondary = secondaryNavItems.filter((item) =>
+    item.workPathNav ? canAccessWorkPaths() : !item.permission || hasPermission(item.permission)
+  )
 
   return (
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:w-56 md:z-30 bg-zinc-900/95 border-r border-zinc-800/80">

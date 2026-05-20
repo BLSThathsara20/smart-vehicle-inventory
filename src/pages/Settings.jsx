@@ -4,7 +4,8 @@ import { auth } from '../lib/firebase'
 import { updateUserProfileDoc } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { Settings as SettingsIcon, LogOut, User, Lock, Save, Loader2 } from 'lucide-react'
+import { Settings as SettingsIcon, LogOut, User, Lock, Save, Loader2, Calendar } from 'lucide-react'
+import { BrowserNotificationsPrefs } from '../components/BrowserNotificationsPrefs'
 
 export function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth()
@@ -111,6 +112,8 @@ export function Settings() {
           </form>
         </section>
 
+        <BrowserNotificationsPrefs />
+
         {/* Change password */}
         <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-5">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -153,6 +156,26 @@ export function Settings() {
               Update password
             </button>
           </form>
+        </section>
+
+        <section className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 p-5">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-sky-400" />
+            Calendar &amp; customer invites
+          </h2>
+          <p className="text-sm text-zinc-400 leading-relaxed">
+            <strong className="text-zinc-300">Today (in the app):</strong> each scheduled viewing has{' '}
+            <strong className="text-zinc-300">Open in Google Calendar</strong> (prefilled event you can save) and{' '}
+            <strong className="text-zinc-300">Download .ics</strong> — send that file or attach it in email so the
+            customer can add the appointment to Apple/Google/Outlook. No company Gmail connection required.
+          </p>
+          <p className="text-sm text-zinc-500 leading-relaxed mt-3">
+            <strong className="text-zinc-400">Next step (Workspace / automation):</strong> connect Google Calendar API
+            with a small backend or Cloud Function: store a refresh token securely, create events on a shared staff
+            calendar, and optionally email invites via Gmail API. That gives automatic &quot;our calendar updated&quot;
+            plus proper attendee invites without manual forwarding. We can add that when you&apos;re ready to wire OAuth
+            and a server.
+          </p>
         </section>
 
         {/* Sign out */}
