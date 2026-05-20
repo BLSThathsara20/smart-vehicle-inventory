@@ -60,6 +60,12 @@ export const DETAIL_SECTIONS = [
         colSpan: 2,
       },
       { key: 'planned_collection_date', label: 'Planned collection', format: (v) => (v ? new Date(v).toLocaleDateString() : 'Not added') },
+      {
+        key: 'pickup_important_notice',
+        label: 'Pickup page notice',
+        format: (v) => (v && String(v).trim() ? String(v).trim() : 'None'),
+        colSpan: 2,
+      },
       { key: 'id_type', label: 'ID type', format: (v) => v || 'Not added' },
     ],
   },

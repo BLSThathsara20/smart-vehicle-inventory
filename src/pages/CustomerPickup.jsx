@@ -17,6 +17,7 @@ import {
   Package,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   User,
   Mail,
   Phone,
@@ -152,8 +153,10 @@ export function CustomerPickup() {
     ((vehicle.plate_no && String(vehicle.plate_no).trim() !== '') ||
       (vehicle.stock_id != null && String(vehicle.stock_id).trim() !== ''))
 
-  const showReservedWaitingBanner =
-    plateVerified && vehicle?.reserved && !vehicle?.sold && !showPlateGate
+  const pickupImportantNotice =
+    typeof vehicle.pickup_important_notice === 'string'
+      ? vehicle.pickup_important_notice.trim()
+      : ''
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white relative">
@@ -218,6 +221,21 @@ export function CustomerPickup() {
             </p>
           </div>
         )}
+
+        {pickupImportantNotice ? (
+          <div
+            className="mb-6 rounded-2xl border border-red-500/45 bg-gradient-to-br from-red-950/50 to-red-950/25 px-4 py-4 shadow-lg shadow-red-900/20 ring-1 ring-red-400/15"
+            role="alert"
+          >
+            <div className="flex gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-red-300">Important notice</p>
+                <p className="text-[15px] text-red-50/95 mt-2 whitespace-pre-wrap leading-relaxed">{pickupImportantNotice}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Status banner - Ready to pickup when manager approved */}
         {isReadyToPickup && (
@@ -327,47 +345,6 @@ export function CustomerPickup() {
             })}
           </div>
         </div>
-
-        {showReservedWaitingBanner ? (
-          <div className="mt-6 relative rounded-3xl overflow-hidden border border-amber-500/25 shadow-lg shadow-amber-500/[0.07] bg-zinc-900/70">
-            <div className="absolute inset-x-0 top-0 h-1 pickup-wait-shimmer rounded-t-3xl" aria-hidden />
-            <div className="relative flex flex-col items-center px-5 pt-8 pb-8 text-center">
-              <div className="relative mb-6 flex h-[5.75rem] w-[5.75rem] items-center justify-center" aria-hidden>
-                <span
-                  className="absolute inset-0 rounded-full bg-amber-400/25 pickup-wait-ring"
-                  style={{ animationDelay: '0ms' }}
-                />
-                <span
-                  className="absolute inset-2 rounded-full border-2 border-amber-400/35 pickup-wait-ring"
-                  style={{ animationDelay: '0.55s' }}
-                />
-                <span
-                  className="absolute inset-[10px] rounded-full border border-amber-400/20 pickup-wait-ring"
-                  style={{ animationDelay: '1.05s' }}
-                />
-                <Lock className="relative z-[1] w-11 h-11 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.45)]" />
-              </div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-500/95">
-                Reserved for you
-              </p>
-              <h3 className="mt-3 text-xl font-bold text-white tracking-tight leading-snug px-2">
-                Your reservation is secured
-              </h3>
-              <p className="mt-2 text-sm text-zinc-400 max-w-[20rem] leading-relaxed px-2">
-                This vehicle is allocated to your order. Hang tight — the team continues delivery prep and quality checks so
-                collection goes smoothly when it&apos;s your turn.
-              </p>
-              <div className="mt-5 flex gap-2 justify-center" aria-hidden>
-                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s]" />
-                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s] [animation-delay:0.18s]" />
-                <span className="h-2 w-2 rounded-full bg-amber-400/90 animate-bounce [animation-duration:1.05s] [animation-delay:0.36s]" />
-              </div>
-              <p className="mt-6 text-[11px] text-zinc-500 max-w-[18rem] leading-relaxed">
-                Need changes? Speak to your sales contact — they can update timing or paperwork for you.
-              </p>
-            </div>
-          </div>
-        ) : null}
 
         {/* Your vehicle specs */}
         <div className="mt-6 rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-4">

@@ -940,6 +940,7 @@ export async function cancelCustomerReservationByPickupToken(
 		carplay_included: null,
 		buyers_name: null,
 		planned_collection_date: null,
+		pickup_important_notice: null,
 		pdi_inspection_json: null,
 	});
 	await deleteReservationWorkflowUpdatesForVehicle(vehicle.id);

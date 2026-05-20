@@ -129,6 +129,7 @@ const defaultForm = (vehicle) => {
   carplay_included: vehicle?.carplay_included ?? false,
   buyers_name: vehicle?.buyers_name ?? '',
   planned_collection_date: vehicle?.planned_collection_date ?? '',
+  pickup_important_notice: vehicle?.pickup_important_notice ?? '',
   pending_issues: vehicle?.pending_issues ?? false,
   pending_issues_details: vehicle?.pending_issues_details ?? '',
   iva_booked: vehicle?.iva_booked ?? '',
@@ -382,6 +383,7 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
             ? form.customer_name?.trim() || form.buyers_name?.trim() || null
             : null,
         planned_collection_date: reserved ? (form.planned_collection_date || null) : null,
+        pickup_important_notice: reserved ? (form.pickup_important_notice?.trim() || null) : null,
         pending_issues: form.pending_issues,
         pending_issues_details: form.pending_issues ? (form.pending_issues_details?.trim() || null) : null,
         iva_booked: form.iva_booked || null,
@@ -883,6 +885,22 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
           <VehicleField label="Planned Collection Date">
             <input type="date" value={form.planned_collection_date} onChange={(e) => update('planned_collection_date', e.target.value)} className={inputClass} />
           </VehicleField>
+          {form.vehicle_status === 'Reserved' && (
+            <div className="md:col-span-2 space-y-1">
+              <VehicleField label="Customer pickup — important notice">
+                <textarea
+                  rows={4}
+                  value={form.pickup_important_notice}
+                  onChange={(e) => update('pickup_important_notice', e.target.value)}
+                  placeholder="Optional. Shown in red at top of customer pickup link when filled (delays, documents needed, etc.). Leave blank to hide."
+                  className={`${inputClass} resize-y min-h-[5rem]`}
+                />
+              </VehicleField>
+              <p className="text-[11px] text-zinc-500 px-1">
+                Visible only on the customer reservation page — clear when no longer needed.
+              </p>
+            </div>
+          )}
           <VehicleField label="Selling Price (£)">
             <input
               type="text"
