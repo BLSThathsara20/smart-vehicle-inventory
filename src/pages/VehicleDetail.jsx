@@ -12,13 +12,12 @@ import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { VehicleCard } from '../components/VehicleCard'
 import { getSimilarVehicles } from '../lib/similarVehicles'
-import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown } from 'lucide-react'
+import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown, ClipboardCheck } from 'lucide-react'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { VehiclePhotoGalleryModal } from '../components/VehiclePhotoGalleryModal'
 import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
 import { ReservationWorkflow } from '../components/ReservationWorkflow'
-import { PdiReservationPanel } from '../components/PdiReservationPanel'
 import { VehicleOpsWorkflow } from '../components/VehicleOpsWorkflow'
 import { ViewingBookingsModal } from '../components/ViewingBookingsModal'
 import { ReserveModal } from '../components/ReserveModal'
@@ -423,15 +422,6 @@ export function VehicleDetail() {
                             {!vehicle.customer_name && !vehicle.customer_email && !vehicle.customer_phone ? 'Add reservation details' : 'Edit reservation details'}
                           </button>
                         )}
-                        {showCollectionReport && (
-                          <Link
-                            to={`/app/collection/${vehicle.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 text-amber-200 text-sm font-medium border border-amber-500/25"
-                          >
-                            <FileDown className="w-4 h-4 shrink-0" />
-                            Pulout &amp; prep report
-                          </Link>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -468,14 +458,28 @@ export function VehicleDetail() {
               <div className="mb-8">
                 <ReservationWorkflow vehicleId={vehicle.id} vehicle={vehicle} canEdit={canEdit} onUpdate={refreshVehicle} />
               </div>
-              <PdiReservationPanel
-                vehicle={vehicle}
-                user={user}
-                profile={profile}
-                canEdit={canEdit}
-                canViewInventory={canViewInventory}
-                onUpdated={refreshVehicle}
-              />
+              {showCollectionReport && (
+                <div className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0 border border-emerald-500/25">
+                      <ClipboardCheck className="w-5 h-5 text-emerald-400" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-white text-sm">PDI &amp; collection report</p>
+                      <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                        Pre-delivery inspection checklist, tyre tread, PDI PDF, and full pulout PDF are all on this page.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to={`/app/collection/${vehicle.id}`}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold shrink-0 transition"
+                  >
+                    Open collection page
+                    <span aria-hidden>→</span>
+                  </Link>
+                </div>
+              )}
             </>
           )}
 

@@ -7,6 +7,8 @@ import {
   workflowInstanceStepKey,
 } from '../lib/sanityData'
 import { buildCollectionPackPdf } from '../lib/collectionPackPdf'
+import { isPdiFinalized } from '../lib/pdiInspectionModel'
+import { PdiReservationPanel } from '../components/PdiReservationPanel'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { LoadingState } from '../components/LoadingState'
@@ -47,9 +49,11 @@ function fmtDateTime(iso) {
 export function CollectionPuloutReport() {
   const { vehicleId } = useParams()
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user, profile } = useAuth()
   const { addNotification } = useNotification()
   const canView = hasPermission('inventory:view')
+  const canEdit = hasPermission('inventory:edit')
+  const canViewInventory = canView
 
   const [vehicle, setVehicle] = useState(null)
   const [profiles, setProfiles] = useState([])
@@ -98,6 +102,11 @@ export function CollectionPuloutReport() {
 
   function handlePdf() {
     if (!vehicle) return
+    const isReservedRow = vehicle.reserved && !vehicle.sold
+    if (isReservedRow && !isPdiFinalized(vehicle.pdi_inspection)) {
+      addNotification('Complete PDI below before exporting the collection pack PDF.', 'info')
+      return
+    }
     setExporting(true)
     try {
       buildCollectionPackPdf(vehicle, { nameByUid })
@@ -134,6 +143,8 @@ export function CollectionPuloutReport() {
 
   const instances = normalizeVehicleWorkflowInstances(vehicle)
   const reserved = vehicle.reserved && !vehicle.sold
+  const pdiComplete = isPdiFinalized(vehicle.pdi_inspection)
+  const collectionPdfBlocked = reserved && !pdiComplete
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-24">
@@ -152,15 +163,20 @@ export function CollectionPuloutReport() {
             Pulout / collection report
           </h1>
           <p className="text-zinc-500 text-sm leading-relaxed">
-            For reservations: planned collection date, customer, assigned prep paths, completed steps (who completed each
-            step), and checklist lines. Export a PDF for the handover folder or customer paperwork.
+            For reservations: planned collection date, customer, PDI checklist (same page), work paths / prep steps, then
+            export a PDF for handover. The collection pack export stays disabled until PDI is marked complete.
           </p>
         </div>
         <button
           type="button"
           onClick={handlePdf}
-          disabled={exporting}
-          className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-zinc-950 font-semibold text-sm transition shrink-0"
+          disabled={exporting || collectionPdfBlocked}
+          title={
+            collectionPdfBlocked
+              ? 'Complete and finalize PDI on this page first'
+              : 'Download collection / pulout PDF'
+          }
+          className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-45 disabled:pointer-events-none text-zinc-950 font-semibold text-sm transition shrink-0"
         >
           <FileDown className="w-5 h-5" />
           {exporting ? 'Saving…' : 'Export PDF'}
@@ -185,6 +201,9 @@ export function CollectionPuloutReport() {
         <Link to={`/vehicle/${vehicle.id}`} className="inline-block text-sm text-amber-500 hover:text-amber-400">
           Open vehicle page →
         </Link>
+        <p className="text-[11px] text-zinc-500 mt-3 leading-relaxed">
+          PDI checklist (tyres, inspection items, export) is on this same page when the vehicle is reserved — see below.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-5 space-y-4">
@@ -237,6 +256,21 @@ export function CollectionPuloutReport() {
           </ul>
         )}
       </section>
+
+      {reserved ? (
+        <PdiReservationPanel
+          vehicle={vehicle}
+          user={user}
+          profile={profile}
+          canEdit={canEdit}
+          canViewInventory={canViewInventory}
+          onUpdated={() => {
+            fetchVehicleById(vehicleId).then((v) => {
+              if (v) setVehicle(v)
+            })
+          }}
+        />
+      ) : null}
 
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-5 space-y-6">
         <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
