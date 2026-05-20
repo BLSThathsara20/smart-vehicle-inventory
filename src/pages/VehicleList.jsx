@@ -372,7 +372,6 @@ export function VehicleList() {
 							aria-label="Search by stock ID or plate number"
 						/>
 					</div>
-					<p className="text-[11px] text-zinc-600 mt-1">Also matches brand, model, and location from the filter panel.</p>
 				</div>
 				<div>
 					<label className="block text-xs text-zinc-500 mb-1">Max price (£)</label>

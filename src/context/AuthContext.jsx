@@ -39,15 +39,9 @@ export function AuthProvider({ children }) {
 			setLoading(false);
 			return;
 		}
-		const unsub = onAuthStateChanged(auth, async (u) => {
-			if (u) {
-				try {
-					await ensureBootstrap();
-					await ensureUserProfileForFirebaseUser(u);
-				} catch {
-					/* profile bootstrap best-effort */
-				}
-			}
+		const unsub = onAuthStateChanged(auth, (u) => {
+			// Apply Firebase session immediately so /login can redirect while Sanity catches up.
+			// Previously we awaited bootstrap here; slow/hanging Sanity kept user === null after Google popup closed.
 			setUser(u);
 			setLoading(false);
 		});
@@ -55,14 +49,15 @@ export function AuthProvider({ children }) {
 	}, [configOk]);
 
 	useEffect(() => {
-		if (!configOk || !user?.uid) {
+		const uid = user?.uid;
+		if (!configOk || !uid) {
 			setProfile(null);
 			setStaffGate(null);
 			setProfileLoading(false);
 			return;
 		}
 		let cancelled = false;
-		const key = profileCacheKey(user.uid);
+		const key = profileCacheKey(uid);
 		let usedCache = false;
 		try {
 			const raw = sessionStorage.getItem(key);
@@ -82,29 +77,46 @@ export function AuthProvider({ children }) {
 		}
 		if (!usedCache) setProfileLoading(true);
 
-		fetchAuthLandingState(user.uid)
-			.then(({ profile: p, staffGate: gate }) => {
-				if (cancelled) return;
-				setProfile(p);
-				setStaffGate(p ? null : gate ?? "none");
-				try {
-					if (p)
-						sessionStorage.setItem(
-							key,
-							JSON.stringify({ t: Date.now(), profile: p }),
-						);
-				} catch {
-					/* private mode */
+		(async () => {
+			const firebaseUser = auth?.currentUser;
+			try {
+				await ensureBootstrap();
+				if (
+					!cancelled &&
+					firebaseUser &&
+					firebaseUser.uid === uid
+				) {
+					await ensureUserProfileForFirebaseUser(firebaseUser);
 				}
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setProfile(null);
-				setStaffGate("none");
-			})
-			.finally(() => {
-				if (!cancelled) setProfileLoading(false);
-			});
+			} catch {
+				/* best-effort — landing fetch still runs */
+			}
+			if (cancelled) return;
+
+			fetchAuthLandingState(uid)
+				.then(({ profile: p, staffGate: gate }) => {
+					if (cancelled) return;
+					setProfile(p);
+					setStaffGate(p ? null : gate ?? "none");
+					try {
+						if (p)
+							sessionStorage.setItem(
+								key,
+								JSON.stringify({ t: Date.now(), profile: p }),
+							);
+					} catch {
+						/* private mode */
+					}
+				})
+				.catch(() => {
+					if (cancelled) return;
+					setProfile(null);
+					setStaffGate("none");
+				})
+				.finally(() => {
+					if (!cancelled) setProfileLoading(false);
+				});
+		})();
 
 		return () => {
 			cancelled = true;

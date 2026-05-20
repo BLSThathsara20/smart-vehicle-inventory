@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { Lock, Mail, ChevronDown, ChevronUp } from "lucide-react";
@@ -40,7 +40,7 @@ export function Login() {
 	const [loading, setLoading] = useState(false);
 	const [googleLoading, setGoogleLoading] = useState(false);
 	const [showEmailForm, setShowEmailForm] = useState(false);
-	const { signIn, signUp, signInWithGoogle } = useAuth();
+	const navigate = useNavigate();
 	const { addNotification } = useNotification();
 
 	const handleGoogle = async () => {
@@ -48,6 +48,7 @@ export function Login() {
 		try {
 			await signInWithGoogle();
 			addNotification("Signed in with Google", "success");
+			navigate("/app", { replace: true });
 		} catch (err) {
 			const code = err?.code;
 			if (code === "auth/popup-closed-by-user") {
