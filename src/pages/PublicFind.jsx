@@ -47,6 +47,7 @@ export function PublicFind() {
     user && !authLoading && profile && !hasPermission('inventory:view'),
   )
   const accountPendingBanner = Boolean(user && !authLoading && !profile)
+  const signedInPublic = Boolean(user && !authLoading)
 
   const [stockId, setStockId] = useState('')
   const [vin, setVin] = useState('')
@@ -205,7 +206,9 @@ export function PublicFind() {
             <div>
               <h1 className="text-lg font-bold tracking-tight">Vehicle stock</h1>
               <p className="text-[11px] text-zinc-500 hidden sm:block">
-                Browse live inventory · Staff sign-in for full record
+                {signedInPublic
+                  ? 'Signed in · Staff account opens your portal or approval status'
+                  : 'Browse live inventory · Staff sign-in for full record'}
               </p>
             </div>
           </div>
@@ -218,13 +221,22 @@ export function PublicFind() {
             >
               <QrCode className="w-5 h-5" />
             </button>
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold"
-            >
-              <LogIn className="w-4 h-4" />
-              Staff login
-            </Link>
+            {signedInPublic ? (
+              <Link
+                to="/app"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-sm font-semibold"
+              >
+                {canStaffInventory ? 'Open staff app' : 'Staff account'}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold"
+              >
+                <LogIn className="w-4 h-4" />
+                Staff login
+              </Link>
+            )}
           </div>
         </div>
       </header>

@@ -12,6 +12,7 @@ export function PublicVehiclePreview() {
   const navigate = useNavigate()
   const { user, hasPermission, loading: authLoading } = useAuth()
   const staffAccess = Boolean(user && hasPermission('inventory:view'))
+  const signedInPublic = Boolean(user && !authLoading)
 
   const [vehicle, setVehicle] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -110,13 +111,22 @@ export function PublicVehiclePreview() {
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Stock</span>
           </Link>
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-700"
-          >
-            <LogIn className="w-4 h-4" />
-            Staff sign in
-          </Link>
+          {signedInPublic ? (
+            <Link
+              to="/app"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-600 text-sm text-zinc-100 hover:bg-zinc-700"
+            >
+              Staff account
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-700"
+            >
+              <LogIn className="w-4 h-4" />
+              Staff sign in
+            </Link>
+          )}
         </div>
       </header>
 
@@ -230,16 +240,33 @@ export function PublicVehiclePreview() {
 
         <div className="mt-8 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-zinc-400">
           <p className="text-zinc-300 font-medium mb-1">Staff access</p>
-          <p className="text-zinc-500">
-            Pricing, reservations, and internal workflow are only visible after you sign in with a dealership account.
-          </p>
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
-          >
-            <LogIn className="w-4 h-4" />
-            Sign in for full details
-          </Link>
+          {signedInPublic ? (
+            <>
+              <p className="text-zinc-500">
+                You&apos;re signed in. Full dealer pricing, reservations, and workflows appear once an administrator
+                approves your account and assigns a role.
+              </p>
+              <Link
+                to="/app"
+                className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 font-semibold text-sm"
+              >
+                Staff portal
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-zinc-500">
+                Pricing, reservations, and internal workflow are only visible after you sign in with a dealership account.
+              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
+              >
+                <LogIn className="w-4 h-4" />
+                Sign in for full details
+              </Link>
+            </>
+          )}
         </div>
       </main>
 
