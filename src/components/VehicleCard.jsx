@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Tag, Package, KeyRound, CircleDashed } from 'lucide-react'
+import { MapPin, Tag, Lock, CheckCircle, Package, KeyRound, CircleDashed } from 'lucide-react'
 import { normalizeVehicleWorkflowInstances, getWorkflowDeadlineVisual } from '../lib/sanityData'
 import { LazyVehicleImage } from './LazyVehicleImage'
 import { isNewlyArrivedStatus } from '../lib/vehicleStatus'
@@ -18,8 +18,8 @@ export function VehicleCard({ vehicle, linkToDetail = true, modelCount, detailTo
   const statusStyles = {
     available: 'border border-zinc-800/60 bg-zinc-900/60 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5',
     newShipment: 'border border-cyan-500/40 bg-cyan-950/20 hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/10',
-    reserved: 'border-2 border-emerald-500/45 bg-emerald-950/25 hover:border-emerald-500/55 shadow-md shadow-emerald-500/5',
-    sold: 'border-2 border-emerald-600/50 bg-emerald-950/35 hover:border-emerald-500/55 shadow-md shadow-emerald-950/20',
+    reserved: 'border-2 border-amber-500/50 bg-amber-950/30 hover:border-amber-500/60 shadow-md shadow-amber-500/5',
+    sold: 'border-2 border-rose-500/40 bg-rose-950/20 hover:border-rose-500/50 shadow-md shadow-rose-500/5',
   }
   const cardClass = isSold
     ? statusStyles.sold
@@ -43,31 +43,32 @@ export function VehicleCard({ vehicle, linkToDetail = true, modelCount, detailTo
         {showNewShipmentChrome && (
           <div className="absolute inset-0 bg-cyan-950/20 pointer-events-none" aria-hidden />
         )}
-        {isReserved && !isSold && (
-          <div className="absolute inset-0 bg-emerald-950/30 pointer-events-none" aria-hidden />
+        {isReserved && (
+          <>
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-emerald-600/35 via-emerald-700/28 to-emerald-900/30 pointer-events-none"
+              aria-hidden
+            />
+            <div className="absolute inset-0 flex items-center justify-center px-6 pointer-events-none z-[5]">
+              <div className="rounded-xl border border-emerald-300/50 bg-emerald-950/50 px-4 py-3 shadow-lg shadow-black/35 backdrop-blur-[3px] text-center ring-2 ring-emerald-400/20">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-200/90">
+                  Status
+                </p>
+                <p className="mt-1 text-base sm:text-lg font-bold uppercase tracking-wider text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                  Reserved
+                </p>
+              </div>
+            </div>
+          </>
         )}
         {isSold && (
-          <div className="absolute inset-0 bg-emerald-950/40 pointer-events-none" aria-hidden />
+          <div className="absolute inset-0 bg-rose-950/30 pointer-events-none" aria-hidden />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        {(isReserved || isSold) && (
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none p-4"
-            aria-hidden
-          >
-            <div className="rounded-2xl border border-emerald-400/35 bg-zinc-950/70 px-6 py-4 sm:px-8 sm:py-5 backdrop-blur-md shadow-[0_12px_48px_rgba(0,0,0,0.5)]">
-              <p
-                className={`text-center text-[1.35rem] sm:text-2xl font-black uppercase tracking-[0.28em] leading-tight ${isSold ? 'text-lime-400' : 'text-emerald-400'}`}
-                style={{
-                  textShadow:
-                    '0 0 40px rgba(52, 211, 153, 0.5), 0 2px 4px rgba(0,0,0,0.8)',
-                }}
-              >
-                {isSold ? 'Sold' : 'Reserved'}
-              </p>
-              <p className="mt-2 text-center text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest text-emerald-200/80">
-                {isSold ? 'Collection complete' : 'Awaiting collection'}
-              </p>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none z-[1]" />
+        {isSold && (
+          <div className="absolute top-0 right-0 w-24 h-24 overflow-hidden pointer-events-none">
+            <div className="absolute top-4 right-[-2rem] rotate-45 bg-rose-600/95 text-white text-[10px] font-bold uppercase tracking-wider py-1 px-8 shadow-sm">
+              Sold
             </div>
           </div>
         )}
@@ -85,7 +86,17 @@ export function VehicleCard({ vehicle, linkToDetail = true, modelCount, detailTo
             </div>
           </div>
         )}
-        <div className="absolute top-3 left-3 flex gap-2 pointer-events-none">
+        <div className="absolute top-3 left-3 flex gap-2">
+          {isSold && (
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-rose-600/90 text-white backdrop-blur-sm flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" /> Sold
+            </span>
+          )}
+          {isReserved && (
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-amber-600/90 text-white backdrop-blur-sm flex items-center gap-1">
+              <Lock className="w-3 h-3" /> Reserved
+            </span>
+          )}
           {showNewShipmentChrome && (
             <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-cyan-600/90 text-white backdrop-blur-sm flex items-center gap-1">
               <Package className="w-3 h-3" /> New shipment
@@ -100,9 +111,9 @@ export function VehicleCard({ vehicle, linkToDetail = true, modelCount, detailTo
       </div>
       <div className={`p-4 ${
         isReserved
-          ? 'border-t border-emerald-500/25'
+          ? 'border-t border-amber-500/20'
           : isSold
-            ? 'border-t border-emerald-500/30'
+            ? 'border-t border-rose-500/20'
             : showNewShipmentChrome
               ? 'border-t border-cyan-500/20'
               : isAvailable
