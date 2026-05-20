@@ -5,7 +5,10 @@ import {
   verificationMatches,
   pickupVerifiedStorageKey,
 } from '../lib/pickupVerification'
-import { CUSTOMER_VISIBLE_STEPS } from '../lib/reservationWorkflow'
+import {
+  CUSTOMER_VISIBLE_STEPS,
+  isReservationStepComplete,
+} from '../lib/reservationWorkflow'
 import {
   Lock,
   ClipboardCheck,
@@ -19,6 +22,7 @@ import {
   Phone,
   Sparkles,
   Car,
+  Wrench,
 } from 'lucide-react'
 import { Footer } from '../components/Footer'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
@@ -31,6 +35,7 @@ const ICONS = {
   Calendar,
   Package,
   CheckCircle,
+  Wrench,
 }
 
 export function CustomerPickup() {
@@ -92,12 +97,8 @@ export function CustomerPickup() {
     }
   }
 
-  const getStepDone = (step) => {
-    if (step.key === 'reserved' && vehicle?.reserved) return true
-    if (step.key === 'pdi') return !!workflow.pdi_approved
-    if (workflow[step.key]) return true
-    return false
-  }
+  const getStepDone = (step) =>
+    isReservationStepComplete(step.key, workflow, vehicle, { customer: true })
 
   const isReadyToPickup = !!workflow.ready_to_pickup
 

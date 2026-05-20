@@ -7,7 +7,11 @@ import {
 } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
-import { RESERVATION_STEPS } from '../lib/reservationWorkflow'
+import {
+  RESERVATION_STEPS,
+  LEGACY_STEPS_AFTER_FULL_SERVICE,
+  isReservationStepComplete,
+} from '../lib/reservationWorkflow'
 import {
   Lock,
   ClipboardCheck,
@@ -21,6 +25,7 @@ import {
   Send,
   ShieldCheck,
   Undo2,
+  Wrench,
 } from 'lucide-react'
 import { LoadingState } from './LoadingState'
 
@@ -31,6 +36,7 @@ const ICONS = {
   Calendar,
   Package,
   CheckCircle,
+  Wrench,
 }
 
 export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
@@ -186,14 +192,41 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
 
   const getStepStatus = (step) => {
     const u = updates[step.key]
-    if (u) return { done: true, comment: u.comment, date: u.updated_at }
-    if (step.key === 'reserved' && vehicle?.reserved) {
-      return { done: true, comment: null, date: vehicle.reserved_date || vehicle.updated_at }
-    }
     const stepIndex = RESERVATION_STEPS.findIndex((s) => s.key === step.key)
     const prevSteps = RESERVATION_STEPS.slice(0, stepIndex)
-    const allPrevDone = prevSteps.every((s) => updates[s.key] || (s.key === 'reserved' && vehicle?.reserved))
-    return { done: false, inProgress: allPrevDone }
+    const allPrevDone = prevSteps.every((s) =>
+      isReservationStepComplete(s.key, updates, vehicle, { customer: false }),
+    )
+    const done = isReservationStepComplete(step.key, updates, vehicle, { customer: false })
+
+    if (done) {
+      if (step.key === 'reserved' && vehicle?.reserved) {
+        return {
+          done: true,
+          comment: null,
+          date: vehicle.reserved_date || vehicle.updated_at,
+          inProgress: false,
+        }
+      }
+      let row = u
+      let legacyNote = false
+      if (
+        step.key === 'full_service' &&
+        !row &&
+        LEGACY_STEPS_AFTER_FULL_SERVICE.some((k) => updates[k])
+      ) {
+        const k = LEGACY_STEPS_AFTER_FULL_SERVICE.find((key) => updates[key])
+        row = k ? updates[k] : null
+        legacyNote = Boolean(row)
+      }
+      return {
+        done: true,
+        comment: legacyNote ? 'Marked complete · later milestones already logged' : row?.comment ?? null,
+        date: row?.updated_at ?? null,
+        inProgress: false,
+      }
+    }
+    return { done: false, comment: null, date: undefined, inProgress: allPrevDone }
   }
 
   if (loading) {

@@ -2868,11 +2868,16 @@ export async function fetchMotVehiclesForNotifications() {
 	);
 }
 
-export async function fetchPdiApprovedVehicleIds(reservedIds) {
-	if (!sanity || !reservedIds?.length) return new Set();
+export async function fetchVehicleIdsHavingReservationSteps(stepKeys, vehicleIds) {
+	if (!sanity || !vehicleIds?.length || !stepKeys?.length) return new Set();
 	const rows = await sanity.fetch(
-		`*[_type == "reservationWorkflowUpdate" && step_key == "pdi_approved" && vehicle_id in $ids].vehicle_id`,
-		{ ids: reservedIds },
+		`*[_type == "reservationWorkflowUpdate" && step_key in $steps && vehicle_id in $ids].vehicle_id`,
+		{ steps: stepKeys, ids: vehicleIds },
 	);
 	return new Set(rows || []);
+}
+
+/** Reserved vehicles whose manager approved PDI (customer-visible gate). */
+export async function fetchPdiApprovedVehicleIds(reservedIds) {
+	return fetchVehicleIdsHavingReservationSteps(["pdi_approved"], reservedIds);
 }

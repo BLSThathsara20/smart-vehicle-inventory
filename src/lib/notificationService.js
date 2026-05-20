@@ -2,6 +2,7 @@ import {
   fetchVehiclesForNotifications,
   fetchMotVehiclesForNotifications,
   fetchPdiApprovedVehicleIds,
+  fetchVehicleIdsHavingReservationSteps,
   fetchVehiclesWithWorkflows,
   fetchVehiclesWithScheduledViewings,
   fetchVehiclesForViewingStaffAlerts,
@@ -11,6 +12,9 @@ import {
   normalizeVehicleWorkflowInstances,
   workflowInstanceStepKey,
 } from './sanityData'
+import {
+  LEGACY_STEPS_AFTER_FULL_SERVICE,
+} from './reservationWorkflow'
 import { getInstanceDiscussionLastSeen } from './workflowBellState'
 
 function localYmd(d = new Date()) {
@@ -72,11 +76,17 @@ export async function fetchAppNotifications() {
   const reservedIds = vehicles.map((v) => v._id)
 
   let pdiApprovedStatus = {}
+  /** Vehicles with recorded full-service step or any downstream milestone (incl. legacy skips). */
+  let pastFullService = new Set()
   if (reservedIds.length > 0) {
     const approved = await fetchPdiApprovedVehicleIds(reservedIds)
     for (const id of approved) {
       pdiApprovedStatus[id] = true
     }
+    pastFullService = await fetchVehicleIdsHavingReservationSteps(
+      ['full_service', ...LEGACY_STEPS_AFTER_FULL_SERVICE],
+      reservedIds,
+    )
   }
 
   for (const v of vehicles || []) {
@@ -138,6 +148,21 @@ export async function fetchAppNotifications() {
       })
     }
 
+    if (!pastFullService.has(v._id)) {
+      const whenBit =
+        deltaColl === 0 ? 'today' : deltaColl === 1 ? 'tomorrow' : 'in 2 days'
+      notifications.push({
+        id: `full-service-due-${vid}`,
+        vehicleId: vid,
+        type: 'full_service_due',
+        title: 'Full service due before collection',
+        message: `${fleet} — Record fresh full service in reservation workflow before PDI/handover (${whenBit}).`,
+        dueDate: collectionYmd,
+        sortAt: `${collectionYmd}T06:30:00`,
+        severity: 'high',
+      })
+    }
+
     if (!pdiDone) {
       const whenBit =
         deltaColl === 0 ? 'today' : deltaColl === 1 ? 'tomorrow' : 'in 2 days'
@@ -146,7 +171,7 @@ export async function fetchAppNotifications() {
         vehicleId: vid,
         type: 'pdi_due',
         title: 'PDI due before collection',
-        message: `${fleet} — Pre-delivery inspection must be finished before customer collection (${whenBit}).`,
+        message: `${fleet} — Pre-delivery inspection must be manager-approved before customer collection (${whenBit}).`,
         dueDate: collectionYmd,
         sortAt: `${collectionYmd}T07:00:00`,
         severity: 'high',

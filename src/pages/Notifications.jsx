@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   AtSign,
   UserPlus,
+  Wrench,
 } from 'lucide-react'
 
 const PAGE_SIZE = 12
@@ -70,6 +71,7 @@ export function Notifications() {
     if (type === 'viewing_manager_alert' || type === 'viewing_mention' || type === 'viewing_team_ping')
       return AtSign
     if (type === 'pdi_due') return ClipboardCheck
+    if (type === 'full_service_due') return Wrench
     if (type === 'mot_expiry') return AlertTriangle
     if (type === 'work_assigned') return ClipboardList
     if (type === 'work_comment') return MessageCircle

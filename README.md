@@ -4,7 +4,7 @@ A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (
 
 ## Features
 
-- Vehicle inventory with dealer-oriented fields, reservation workflow, customer pickup links
+- Vehicle inventory with dealer-oriented fields, reservation workflow (reserved → **fresh full service** → PDI → delivery → handover), customer pickup links
 - **Firebase** – Google sign-in and email/password; password reset via email
 - **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
 - **ImgBB** – vehicle photos stored as URLs on each vehicle document
