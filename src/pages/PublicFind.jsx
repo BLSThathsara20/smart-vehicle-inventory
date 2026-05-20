@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Sparkles,
   Car,
+  CalendarClock,
 } from 'lucide-react'
 import { Footer } from '../components/Footer'
 import { LoadingState } from '../components/LoadingState'
@@ -213,6 +214,13 @@ export function PublicFind() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Link
+              to="/pullouts"
+              className="hidden sm:inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-sm font-medium"
+            >
+              <CalendarClock className="w-4 h-4" aria-hidden />
+              Pullouts
+            </Link>
             <button
               type="button"
               onClick={() => setQrOpen(true)}

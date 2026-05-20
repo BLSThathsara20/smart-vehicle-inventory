@@ -841,6 +841,38 @@ export async function fetchVehiclePublicById(id) {
 	};
 }
 
+/**
+ * Scheduled collections (pullouts): reserved, not sold, with a planned collection date.
+ * Read-only projection for public listings — excludes customer/contact, pricing, pickup tokens,
+ * reservation dates, buyers, viewing bookings, etc.
+ */
+export async function fetchVehiclesPublicPullouts() {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const lim = 300;
+	const docs = await sanity.fetch(
+		`*[_type == "vehicle" && reserved == true && sold != true && defined(planned_collection_date)]
+			| order(planned_collection_date asc) [0...${lim}]{
+			_id,
+			stock_id,
+			brand,
+			model,
+			plate_no,
+			vin,
+			model_year,
+			vehicle_status,
+			planned_collection_date,
+			ready_pullout,
+			reserved,
+			sold,
+			ops_workflow,
+			ops_workflows,
+			images[]{ _key, url, sortOrder }
+		}`,
+	);
+	return (docs || []).map((d) => sanityVehicleToApp(d)).filter(Boolean);
+}
+
 export async function fetchVehicleByPickupToken(token) {
 	if (!sanity) return null;
 	const doc = await sanity.fetch(

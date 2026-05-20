@@ -10,6 +10,7 @@ import { VehicleDetail } from "./pages/VehicleDetail";
 import { Search } from "./pages/Search";
 import { PublicFind } from "./pages/PublicFind";
 import { PublicVehiclePreview } from "./pages/PublicVehiclePreview";
+import { PublicPullouts } from "./pages/PublicPullouts";
 import { Settings } from "./pages/Settings";
 import { Health } from "./pages/Health";
 import { Space } from "./pages/Space";
@@ -150,6 +151,7 @@ function AppRoutes() {
 			{/* Public - no login required */}
 			<Route path="/find/vehicle/:id" element={<PublicVehiclePreview />} />
 			<Route path="/find" element={<PublicFind />} />
+			<Route path="/pullouts" element={<PublicPullouts />} />
 			<Route path="/pickup/:token" element={<CustomerPickup />} />
 			<Route path="/privacy" element={<Privacy />} />
 			<Route path="/reset-password" element={<ResetPassword />} />

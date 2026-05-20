@@ -14,6 +14,10 @@ export function Footer() {
           Savindu Thathsara
         </a>
         {' · '}
+        <Link to="/pullouts" className="text-amber-400 hover:text-amber-300">
+          Scheduled collections
+        </Link>
+        {' · '}
         <Link to="/privacy" className="text-amber-400 hover:text-amber-300">
           Privacy & Data Protection
         </Link>
