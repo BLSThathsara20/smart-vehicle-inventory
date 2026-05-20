@@ -50,14 +50,26 @@ export const PDI_CHECKS_COL2 = [
   { key: 'windshield_fluid', label: 'Windshield fluid check' },
 ]
 
-/** @type {{ key: string, label: string }[]} */
+/** @type {{ key: string, label: string, hint?: string }[]} */
 export const PDI_TYRE_KEYS = [
-  { key: 'fr', label: 'FR (tyre tread)' },
-  { key: 'fl', label: 'FL' },
-  { key: 'rr', label: 'RR' },
-  { key: 'rl', label: 'RL' },
+  { key: 'fr', label: 'FR', hint: 'Front right' },
+  { key: 'fl', label: 'FL', hint: 'Front left' },
+  { key: 'rr', label: 'RR', hint: 'Rear right' },
+  { key: 'rl', label: 'RL', hint: 'Rear left' },
 ]
 
+export const PDI_TYRE_POSITION_KEYS = ['fr', 'fl', 'rr', 'rl']
+
+/** Tyre tread depth / note per corner (stored as string, e.g. mm). */
+export function normalizeTyreTreadCell(raw) {
+	if (raw === true || raw === 'true') return 'OK'
+	if (raw === false || raw == null) return ''
+	return String(raw).trim()
+}
+
+export function isTyreTreadCellFilled(value) {
+	return normalizeTyreTreadCell(value) !== ''
+}
 /** Mechanic photo checklist */
 export const PDI_MECHANIC_CHECKS = [
   { key: 'photo_dipstick_old_oil', label: 'Photo of dipstick — old oil' },
@@ -76,7 +88,7 @@ function emptyChecksMap(keys) {
 }
 
 export function emptyPdiTyres() {
-  return { fr: false, fl: false, rr: false, rl: false }
+	return { fr: '', fl: '', rr: '', rl: '' }
 }
 
 /** @typedef {{
@@ -93,7 +105,7 @@ export function emptyPdiTyres() {
  *     md_signature?: string,
  *   },
  *   checks_main?: ChecksMap,
- *   tyre_tread?: { fr?: boolean, fl?: boolean, rr?: boolean, rl?: boolean },
+ *   tyre_tread?: { fr?: string, fl?: string, rr?: string, rl?: string },
  *   checks_mechanic?: ChecksMap,
  *   damages?: string,
  *   finalized_at?: string | null,
@@ -141,13 +153,13 @@ export function normalizePdiInspection(doc) {
   Object.keys(base.checks_main).forEach((k) => {
     base.checks_main[k] = !!base.checks_main[k]
   })
-  base.tyre_tread = {
-    ...(base.tyre_tread || emptyPdiTyres()),
-    ...(typeof d.tyre_tread === 'object' && d.tyre_tread ? d.tyre_tread : {}),
-  }
-  ;['fr', 'fl', 'rr', 'rl'].forEach((t) => {
-    base.tyre_tread[t] = !!base.tyre_tread[t]
-  })
+	base.tyre_tread = {
+		...(base.tyre_tread || emptyPdiTyres()),
+		...(typeof d.tyre_tread === 'object' && d.tyre_tread ? d.tyre_tread : {}),
+	}
+	for (const t of PDI_TYRE_POSITION_KEYS) {
+		base.tyre_tread[t] = normalizeTyreTreadCell(base.tyre_tread[t])
+	}
   base.checks_mechanic = {
     ...(base.checks_mechanic || {}),
     ...(typeof d.checks_mechanic === 'object' && d.checks_mechanic ? d.checks_mechanic : {}),
@@ -204,7 +216,10 @@ export function pdiCheckboxProgress(inspection) {
     }
   }
   count(normalized.checks_main)
-  count(normalized.tyre_tread)
+  for (const k of PDI_TYRE_POSITION_KEYS) {
+    total += 1
+    if (isTyreTreadCellFilled(normalized.tyre_tread?.[k])) checked += 1
+  }
   count(normalized.checks_mechanic)
   return { checked, total }
 }

@@ -71,7 +71,7 @@ When a vehicle is **reserved**, the app stores a checklist on the Sanity `vehicl
 
 2. Reservations created from **Reserve vehicle** or from **Vehicle form** → **Reserved** automatically seed headers (plate, VIN, mileage, buyer name, vehicle make/model) into that JSON.
 
-3. On the vehicle detail page (reserved vehicles), expand **Pre-Delivery Inspection (PDI)** to tick items, enter damages / MD approval line, **Save draft**, optionally **Export PDI PDF** for stamping, then **Complete PDI** to mark checklist finalized and sync the reservation workflow “Pre-delivery inspection” step (if not already recorded).
+3. On the vehicle detail page (reserved vehicles), expand **Pre-Delivery Inspection (PDI)** to tick inspection items, enter **tyre tread depth per corner** (FR/FL/RR/RL, e.g. mm), damages / MD approval line, **Save draft**, optionally **Export PDI PDF** for stamping, then **Complete PDI** to mark checklist finalized and sync the reservation workflow “Pre-delivery inspection” step (if not already recorded).
 
 Optional env: **`VITE_PDI_BRAND_LINE`** — overrides the PDF header branding (see `.env.example`).
 

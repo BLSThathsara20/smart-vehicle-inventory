@@ -9,6 +9,7 @@ import {
   PDI_MECHANIC_CHECKS,
   normalizePdiInspection,
   isPdiFinalized,
+  PDI_TYRE_KEYS,
 } from './pdiInspectionModel.js'
 
 function yn(v) {
@@ -99,24 +100,27 @@ export function buildVehiclePdiPdf(vehicle = {}, inspection) {
   y = (typeof tableEnd === 'number' ? tableEnd : y) + 6
 
   doc.setFont(undefined, 'bold')
-  doc.text('Tyre tread', margin, y)
+  doc.text('Tyre tread depth (per corner)', margin, y)
   y += 4
   const tyres = pdi.tyre_tread || {}
+  const treadDisplay = (v) => {
+    const s = v != null && typeof v !== 'boolean' ? String(v).trim() : ''
+    if (s) return s
+    if (v === true) return 'OK'
+    return '—'
+  }
   autoTable(doc, {
     startY: y,
-    body: [
-      [
-        'FR',
-        yn(!!tyres.fr),
-        'FL',
-        yn(!!tyres.fl),
-        'RR',
-        yn(!!tyres.rr),
-        'RL',
-        yn(!!tyres.rl),
-      ],
-    ],
+    head: [['Position', 'Tread / note']],
+    body: PDI_TYRE_KEYS.map((t) => [
+      `${t.label}${t.hint ? ` (${t.hint})` : ''}`,
+      treadDisplay(tyres[t.key]),
+    ]),
     styles: { fontSize: 8, cellPadding: 1 },
+    columnStyles: {
+      0: { cellWidth: 52 },
+      1: { cellWidth: pageW - margin * 2 - 52 },
+    },
   })
   tableEnd = doc.lastAutoTable?.finalY
   y = (typeof tableEnd === 'number' ? tableEnd : y) + 6

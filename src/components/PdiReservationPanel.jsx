@@ -98,11 +98,14 @@ export function PdiReservationPanel({ vehicle, user, profile, canEdit, canViewIn
     )
   }, [])
 
-  const toggleTyre = useCallback((key) => {
+  const setTyreTreadField = useCallback((key, value) => {
     setState((s) =>
       normalizePdiInspection({
         ...s,
-        tyre_tread: { ...s.tyre_tread, [key]: !s.tyre_tread[key] },
+        tyre_tread: {
+          ...s.tyre_tread,
+          [key]: typeof value === 'string' ? value : String(value ?? ''),
+        },
       })
     )
   }, [])
@@ -330,19 +333,29 @@ export function PdiReservationPanel({ vehicle, user, profile, canEdit, canViewIn
           </section>
 
           <section>
-            <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Tyre tread</h4>
-            <div className="flex flex-wrap gap-4">
+            <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+              Tyre tread (enter depth per corner, e.g. mm)
+            </h4>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {PDI_TYRE_KEYS.map((t) => (
-                <label key={t.key} className="inline-flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <div key={t.key}>
+                  <label className="block text-[11px] text-zinc-400 mb-1">
+                    <span className="font-semibold text-zinc-300">{t.label}</span>
+                    {t.hint ? (
+                      <span className="text-zinc-500 font-normal"> · {t.hint}</span>
+                    ) : null}
+                  </label>
                   <input
-                    type="checkbox"
-                    className="rounded border-zinc-600 bg-zinc-950 text-emerald-500 disabled:opacity-40"
-                    checked={!!state.tyre_tread[t.key]}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="e.g. 5.6"
+                    value={state.tyre_tread?.[t.key] ?? ''}
                     disabled={!canEdit}
-                    onChange={() => toggleTyre(t.key)}
+                    onChange={(e) => setTyreTreadField(t.key, e.target.value)}
+                    className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white placeholder-zinc-600 disabled:opacity-50 font-mono tabular-nums"
                   />
-                  {t.label}
-                </label>
+                </div>
               ))}
             </div>
           </section>
