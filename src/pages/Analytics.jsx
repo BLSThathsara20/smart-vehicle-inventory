@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   fetchVehiclesWithWorkPathAnalytics,
   fetchSoldVehiclesAnalyticsTimeline,
+  fetchWorkshopServicesCompletedForAnalytics,
   vehicleCounts,
   normalizeVehicleWorkflowInstances,
 } from '../lib/sanityData'
 import {
   aggregateWorkflowTimeByUser,
   aggregateCompletedSessionsCount,
-  soldCountsByMonth,
+  soldActivityByMonth,
+  workshopCompletedByMonth,
 } from '../lib/workflowAnalytics'
 import { formatDurationMs } from '../lib/workflowTime'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +18,8 @@ import { useNotification } from '../context/NotificationContext'
 import {
   BarChart,
   Bar,
+  Line,
+  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -30,6 +34,12 @@ import { BarChart3, Info } from 'lucide-react'
 import { LoadingState } from '../components/LoadingState'
 
 const CHART_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#34d399', '#fb7185', '#fbbf24', '#2dd4bf', '#c084fc']
+
+const gbpFmt = new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'GBP',
+  maximumFractionDigits: 0,
+})
 
 function chartTooltipStyle() {
   return {
@@ -52,6 +62,7 @@ export function Analytics() {
   const [counts, setCounts] = useState(null)
   const [workflowRows, setWorkflowRows] = useState([])
   const [soldRows, setSoldRows] = useState([])
+  const [workshopCompleted, setWorkshopCompleted] = useState([])
 
   useEffect(() => {
     if (!canView) {
@@ -72,6 +83,9 @@ export function Analytics() {
         setLoadMessage('Loading sold-vehicle timeline…')
         const s = await fetchSoldVehiclesAnalyticsTimeline(500)
         if (!cancelled) setSoldRows(s || [])
+        setLoadMessage('Loading workshop completion revenue…')
+        const ws = await fetchWorkshopServicesCompletedForAnalytics(2000)
+        if (!cancelled) setWorkshopCompleted(ws || [])
       } catch (e) {
         if (!cancelled) addNotification(e.message || 'Failed to load analytics', 'error')
       } finally {
@@ -93,7 +107,20 @@ export function Analytics() {
     ].filter((x) => x.value > 0)
   }, [counts])
 
-  const soldByMonth = useMemo(() => soldCountsByMonth(soldRows, 12), [soldRows])
+  const soldByMonthWithRev = useMemo(() => soldActivityByMonth(soldRows, 12), [soldRows])
+
+  const workshopByMonth = useMemo(
+    () => workshopCompletedByMonth(workshopCompleted, 12),
+    [workshopCompleted],
+  )
+
+  const rollup12 = useMemo(() => {
+    const carsSold = soldByMonthWithRev.reduce((a, x) => a + x.count, 0)
+    const saleRev = soldByMonthWithRev.reduce((a, x) => a + x.revenue, 0)
+    const wsJobs = workshopByMonth.reduce((a, x) => a + x.jobs, 0)
+    const wsRev = workshopByMonth.reduce((a, x) => a + x.revenue, 0)
+    return { carsSold, saleRev, wsJobs, wsRev }
+  }, [soldByMonthWithRev, workshopByMonth])
 
   const timeByUser = useMemo(() => aggregateWorkflowTimeByUser(workflowRows), [workflowRows])
 
@@ -160,16 +187,44 @@ export function Analytics() {
           Analytics
         </h1>
         <p className="text-zinc-500 text-sm mt-1 max-w-2xl">
-          Inventory mix, approximate sales timing from stock updates, and work-path time logged by person (timer sessions).
+          Inventory mix, sales counts and approximate revenue ({' '}
+          <span className="text-zinc-400">agreed deal price when set, otherwise list price</span>
+          ), completed workshop takings by month, and work-path time by person (timer sessions).
         </p>
         <p className="mt-3 flex gap-2 text-[11px] text-zinc-600 leading-relaxed max-w-3xl">
           <Info className="w-4 h-4 shrink-0 text-zinc-500 mt-0.5" />
           <span>
-            Sale-by-month uses each sold vehicle&apos;s document <span className="text-zinc-500">_updatedAt</span> as a proxy
-            for when it was marked sold (not a dedicated contract date). Work time sums only completed timer sessions.
+            Sale charts use each sold vehicle&apos;s document{' '}
+            <span className="text-zinc-500">_updatedAt</span> as a proxy for sale month — not a contract date — and analyse the
+            most recent inventory sample fetched from Sanity. Workshop revenue uses completed jobs attributed to{' '}
+            <span className="text-zinc-500">completed_at</span> (fallback scheduled date). Timer charts sum only completed timer
+            sessions.
           </span>
         </p>
       </div>
+
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">Cars sold (12 mo)</p>
+          <p className="text-2xl font-semibold text-white tabular-nums mt-1">{rollup12.carsSold}</p>
+          <p className="text-[11px] text-zinc-600 mt-1">In latest sold-inventory sample.</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">Sale revenue (12 mo)</p>
+          <p className="text-2xl font-semibold text-emerald-400/95 tabular-nums mt-1">{gbpFmt.format(rollup12.saleRev)}</p>
+          <p className="text-[11px] text-zinc-600 mt-1">Agreed deal if set.</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">Workshop jobs (12 mo)</p>
+          <p className="text-2xl font-semibold text-white tabular-nums mt-1">{rollup12.wsJobs}</p>
+          <p className="text-[11px] text-zinc-600 mt-1">Completed services in sample.</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">Workshop revenue (12 mo)</p>
+          <p className="text-2xl font-semibold text-sky-400/95 tabular-nums mt-1">{gbpFmt.format(rollup12.wsRev)}</p>
+          <p className="text-[11px] text-zinc-600 mt-1">Sum of logged service prices.</p>
+        </div>
+      </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 md:p-5">
@@ -205,22 +260,81 @@ export function Analytics() {
 
         <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 md:p-5">
           <h2 className="text-sm font-semibold text-white mb-1">Sales by month</h2>
-          <p className="text-xs text-zinc-500 mb-4">Sold vehicles (recent samples), by update month</p>
+          <p className="text-xs text-zinc-500 mb-4">Cars sold and approximate revenue (same month buckets)</p>
           <div className="h-[260px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={soldByMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart data={soldByMonthWithRev} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(39 39 42)" />
                 <XAxis dataKey="label" tick={{ fill: 'rgb(161 161 170)', fontSize: 11 }} axisLine={false} />
-                <YAxis tick={{ fill: 'rgb(161 161 170)', fontSize: 11 }} axisLine={false} allowDecimals={false} />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fill: 'rgb(161 161 170)', fontSize: 11 }}
+                  axisLine={false}
+                  allowDecimals={false}
+                  width={36}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fill: 'rgb(161 161 170)', fontSize: 10 }}
+                  axisLine={false}
+                  tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : v}`}
+                  width={44}
+                />
                 <Tooltip
                   {...chartTooltipStyle()}
-                  formatter={(v) => [v, 'Sold (approx.)']}
+                  formatter={(v, name) =>
+                    name === 'revenue' ? [gbpFmt.format(Number(v)), 'Sale revenue (approx.)'] : [v, 'Cars sold']
+                  }
                   labelFormatter={(l) => l}
                 />
-                <Bar dataKey="count" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={48} />
-              </BarChart>
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Bar
+                  yAxisId="left"
+                  dataKey="count"
+                  name="Cars sold"
+                  fill="#f59e0b"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={48}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Sale revenue"
+                  stroke="#34d399"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#34d399' }}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 md:p-5">
+        <h2 className="text-sm font-semibold text-white mb-1">Workshop revenue by month</h2>
+        <p className="text-xs text-zinc-500 mb-4">Completed bookings with a service price, by completion month</p>
+        <div className="h-[260px] w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={workshopByMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(39 39 42)" />
+              <XAxis dataKey="label" tick={{ fill: 'rgb(161 161 170)', fontSize: 11 }} axisLine={false} />
+              <YAxis
+                tick={{ fill: 'rgb(161 161 170)', fontSize: 11 }}
+                axisLine={false}
+                tickFormatter={(v) => `£${v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : v}`}
+              />
+              <Tooltip
+                {...chartTooltipStyle()}
+                formatter={(v, _n, p) => [
+                  `${gbpFmt.format(Number(v))} · ${p?.payload?.jobs ?? 0} job(s)`,
+                  'Workshop takings',
+                ]}
+              />
+              <Bar dataKey="revenue" fill="#38bdf8" radius={[6, 6, 0, 0]} maxBarSize={48} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </section>
 

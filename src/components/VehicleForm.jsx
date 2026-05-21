@@ -154,6 +154,10 @@ const defaultForm = (vehicle) => {
     vehicle?.selling_price != null && vehicle?.selling_price !== ''
       ? decimalToDisplayComma(vehicle.selling_price)
       : '',
+  agreed_deal_price:
+    vehicle?.agreed_deal_price != null && vehicle?.agreed_deal_price !== ''
+      ? decimalToDisplayComma(vehicle.agreed_deal_price)
+      : '',
   warranty: vehicle?.warranty ?? '',
   id_type: vehicle?.id_type ?? '',
   wholesale_retail: vehicle?.wholesale_retail ?? '',
@@ -405,6 +409,8 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
         spare_key: form.spare_key,
         v55_registration_done: form.v55_registration_done,
         selling_price: parseCommaDecimal(form.selling_price),
+        agreed_deal_price:
+          reserved || sold ? parseCommaDecimal(form.agreed_deal_price) : null,
         warranty: form.warranty || null,
         id_type: form.id_type || null,
         wholesale_retail: form.wholesale_retail || null,
@@ -917,6 +923,22 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
               className={inputClass}
             />
           </VehicleField>
+          {(form.vehicle_status === 'Reserved' || form.vehicle_status === 'Sold') && (
+            <VehicleField label="Agreed deal price (£)">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.agreed_deal_price}
+                onChange={(e) => update('agreed_deal_price', formatTypingMoney(e.target.value, { treatTrailingDot: true }))}
+                placeholder={
+                  form.vehicle_status === 'Sold'
+                    ? 'Final sold amount if negotiated'
+                    : 'Final amount if negotiated from list price'
+                }
+                className={inputClass}
+              />
+            </VehicleField>
+          )}
           <VehicleField label="Warranty">
             <select value={form.warranty} onChange={(e) => update('warranty', e.target.value)} className={selectClass}>
               <option value="">Select</option>

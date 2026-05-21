@@ -9,7 +9,7 @@ A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (
 - **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
 - **ImgBB** – vehicle photos stored as URLs on each vehicle document
 - Search, filters, notifications, export (PDF/Excel), mobile-first UI
-- **Workshop services** — `/app/services` schedules jobs for inventory or external customers, optional mechanic and sales assignments, overlap-aware calendar-day popover, and “service today” rows in **Notifications** for assignees plus manager-tier roles (`super_admin` or permissions `inventory:delete` / `users:manage`). Editing uses the same **inventory:edit** permission as vehicle/viewing workflows.
+- **Workshop services** — `/app/services` schedules jobs for inventory or external customers, optional mechanic and sales assignments, overlap-aware calendar-day popover, **PDF export** of bookings **without customer contact columns**, **permanent purge** with a Sanity **`deletionAudit`** snapshot (who deleted + non‑PII fields; requires **`inventory:delete`**), and “service today” rows in **Notifications** for assignees plus manager-tier roles (`super_admin` or permissions `inventory:delete` / `users:manage`). Editing uses the same **inventory:edit** permission as vehicle/viewing workflows.
 - **Public scheduled collections** — `/pullouts` lists reserved vehicles (not sold); those with a planned collection date sort first, others still appear until a date is set (no customer PII); read-only for everyone including guests, with PDF export. Signed-in staff also reach this from the sidebar **Pullouts** link (same URL).
 
 ## Setup
@@ -67,6 +67,7 @@ Add this document type in Studio so you can sanity-check fields locally (optiona
 | `location` | string | Where the job happens |
 | `mechanic_firebase_uid`, `sales_firebase_uid` | strings | Firebase Auth UID of assignees (notifications when today) |
 | `notes` | text | Instructions / comments |
+| `service_price` | number | Optional job charge (used for diary-month earnings banners and analytics). |
 | `status` | string | `scheduled`, `completed`, or `cancelled` |
 | `completed_at` | datetime | Set when marked **Done** (status `completed`) |
 | `cancelled_at` | datetime | Set when cancelled |
@@ -74,6 +75,19 @@ Add this document type in Studio so you can sanity-check fields locally (optiona
 
 Stable `_id` pattern from the client: `workshopService.{uuid}`.
 
+### Sanity `deletionAudit` (workshop purge log)
+
+Written **before** a `workshopService` document is hard-deleted. Add in Studio optionally (the **API creates** these docs without a Studio schema).
+
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `resource_type` | string | Currently `workshopService` |
+| `resource_id` | string | The deleted Sanity `_id` |
+| `deleted_at` | datetime | Mutation time |
+| `deleted_by_firebase_uid`, `deleted_by_email`, `deleted_by_display_name` | strings | Acting user from the signed-in profile / Firebase session |
+| `snapshot` | object | **Non‑PII** copy: schedule, vehicle make/model/plate, location, assignee UIDs, inventory link, statuses, timestamps — customer name/phone/email/notes **are intentionally omitted** |
+
+For **inventory vehicles**, deletion with audit is handled from **Vehicle detail** (`inventory:delete`). Viewing bookings and similar data are trimmed on vehicles / flows as today.
 
 
 ## Pre-delivery inspection (PDI)
@@ -101,6 +115,8 @@ Optional env: **`VITE_PDI_BRAND_LINE`** — overrides the PDF header branding (s
 ### Customer pickup link — important notice (Sanity)
 
 Optional **`pickup_important_notice`** (`text`) on the **`vehicle`** document. When it has content, the customer reservation/pickup page (`/pickup/:token`) shows a highlighted alert near the top. Staff can edit it from the vehicle form when status is **Reserved**; it is cleared when status is no longer reserved or when the reservation is cancelled via the app’s pickup-token flow.
+
+**`agreed_deal_price`** (number, optional) — final negotiated amount when reserving or handing over a sale. Inventory **Analytics** prefers this figure over **`selling_price`** for monthly sale-revenue totals when it is present. Capture it when **Reserve vehicle** opens or edit it on the vehicle form (**Reserved** / **Sold**). Add the field to your **`vehicle`** schema in Sanity Studio alongside **`selling_price`**.
 
 Add to Studio:
 

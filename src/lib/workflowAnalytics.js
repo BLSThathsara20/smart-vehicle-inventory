@@ -46,22 +46,85 @@ export function aggregateCompletedSessionsCount(vehicles) {
   return n
 }
 
-/** @param {{ _updatedAt?: string }[]} soldDocs */
-export function soldCountsByMonth(soldDocs, monthsBack = 12) {
+function saleAmountFromSoldDoc(doc) {
+  const rawA = doc?.agreed_deal_price
+  if (rawA != null && rawA !== '') {
+    const a = Number(rawA)
+    if (Number.isFinite(a)) return Math.max(0, a)
+  }
+  const rawS = doc?.selling_price
+  if (rawS != null && rawS !== '') {
+    const s = Number(rawS)
+    if (Number.isFinite(s)) return Math.max(0, s)
+  }
+  return 0
+}
+
+/** @param {{ agreed_deal_price?, selling_price?, _updatedAt?: string }[]} soldDocs */
+export function soldActivityByMonth(soldDocs, monthsBack = 12) {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1)
   const buckets = new Map()
   for (let i = 0; i < monthsBack; i++) {
     const d = new Date(start.getFullYear(), start.getMonth() + i, 1)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    buckets.set(key, { key, label: d.toLocaleString(undefined, { month: 'short', year: 'numeric' }), count: 0 })
+    buckets.set(key, {
+      key,
+      label: d.toLocaleString(undefined, { month: 'short', year: 'numeric' }),
+      count: 0,
+      revenue: 0,
+    })
   }
   for (const doc of soldDocs || []) {
     const t = doc._updatedAt ? new Date(doc._updatedAt).getTime() : NaN
     if (Number.isNaN(t)) continue
     const d = new Date(t)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (buckets.has(key)) buckets.get(key).count += 1
+    if (!buckets.has(key)) continue
+    const row = buckets.get(key)
+    row.count += 1
+    row.revenue += saleAmountFromSoldDoc(doc)
   }
   return [...buckets.values()]
+}
+
+/** Completed workshop jobs attributed to calendar month by `completed_at` (fallback `scheduled_at`). */
+export function workshopCompletedByMonth(rows, monthsBack = 12) {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1)
+  const buckets = new Map()
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    buckets.set(key, {
+      key,
+      label: d.toLocaleString(undefined, { month: 'short', year: 'numeric' }),
+      revenue: 0,
+      jobs: 0,
+    })
+  }
+  for (const row of rows || []) {
+    const raw = row.completed_at || row.scheduled_at
+    if (!raw) continue
+    const t = new Date(raw).getTime()
+    if (Number.isNaN(t)) continue
+    const d = new Date(t)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (!buckets.has(key)) continue
+    const bucket = buckets.get(key)
+    const p = Number(row.service_price)
+    const val = Number.isFinite(p) && p >= 0 ? p : 0
+    bucket.revenue += val
+    bucket.jobs += 1
+  }
+  return [...buckets.values()]
+}
+
+/** @param {{ _updatedAt?: string }[]} soldDocs */
+export function soldCountsByMonth(soldDocs, monthsBack = 12) {
+  return soldActivityByMonth(soldDocs, monthsBack).map(({ key, label, count }) => ({
+    key,
+    label,
+    count,
+  }))
 }

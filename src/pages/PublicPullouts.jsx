@@ -61,7 +61,7 @@ function PulloutPrepWorkColumn({ vehicle }) {
                     </td>
                     <td className="px-2 py-1.5 text-zinc-400 leading-snug">{r.stepLine || '—'}</td>
                     <td className="px-2 py-1.5 text-zinc-500 leading-snug break-words">{r.assignee}</td>
-                    <td className="px-2 py-1.5 text-zinc-200 leading-snug break-words">{r.task}</td>
+                    <td className="px-2 py-1.5 text-zinc-200 leading-snug break-words">{r.task?.trim() ? r.task : ''}</td>
                   </tr>
                 ))}
               </tbody>

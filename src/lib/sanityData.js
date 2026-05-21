@@ -946,6 +946,7 @@ export async function cancelCustomerReservationByPickupToken(
 		pdi_inspection_json: null,
 		customer_collection_confirmed_at: null,
 		customer_collection_time_note: null,
+		agreed_deal_price: null,
 	});
 	await deleteReservationWorkflowUpdatesForVehicle(vehicle.id);
 }
@@ -2892,9 +2893,72 @@ export async function fetchSoldVehiclesAnalyticsTimeline(limit = 400) {
       _id,
       brand,
       model,
+      selling_price,
+      agreed_deal_price,
       _updatedAt
     }`,
 	);
+}
+
+/** Workshop jobs completed — for analytics (revenue by completion month). */
+export async function fetchWorkshopServicesCompletedForAnalytics(limit = 2000) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const lim = Math.min(Math.max(1, Number(limit) || 2000), 4000);
+	return sanity.fetch(
+		`*[_type == "workshopService" && status == "completed"] | order(coalesce(completed_at, scheduled_at) desc) [0...${lim}] {
+      completed_at,
+      scheduled_at,
+      service_price
+    }`,
+	);
+}
+
+/** Earnings booked on the diary in a calendar month (local): completed jobs + optional pipeline (scheduled). */
+export async function fetchWorkshopServiceMonthTotals(year, monthZeroBased) {
+	if (!sanity) {
+		return {
+			completedRevenue: 0,
+			pipelineRevenue: 0,
+			completedCount: 0,
+			scheduledCount: 0,
+		};
+	}
+	await ensureBootstrap();
+	const y = Math.floor(Number(year) || new Date().getFullYear());
+	const m = Math.min(11, Math.max(0, Number(monthZeroBased) || 0));
+	const start = new Date(y, m, 1, 0, 0, 0, 0);
+	const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+	const fromIso = start.toISOString();
+	const toIso = end.toISOString();
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService" && scheduled_at >= $from && scheduled_at <= $to ]{
+       status,
+       service_price
+     }`,
+		{ from: fromIso, to: toIso },
+	);
+	let completedRevenue = 0;
+	let pipelineRevenue = 0;
+	let completedCount = 0;
+	let scheduledCount = 0;
+	for (const d of docs || []) {
+		const p = Number(d.service_price);
+		const val = Number.isFinite(p) && p >= 0 ? p : 0;
+		if (d.status === "completed") {
+			completedRevenue += val;
+			completedCount += 1;
+		} else if (d.status === "scheduled") {
+			pipelineRevenue += val;
+			scheduledCount += 1;
+		}
+	}
+	return {
+		completedRevenue,
+		pipelineRevenue,
+		completedCount,
+		scheduledCount,
+	};
 }
 
 // --- Users / Roles (admin) ---
@@ -3146,8 +3210,11 @@ export function normalizeWorkshopService(doc) {
 		(doc.inventory_vehicle && String(doc.inventory_vehicle)) ||
 		"";
 	const dm = Number(doc.duration_minutes);
+	const spr = Number(doc.service_price);
 	return {
 		id: doc._id,
+		service_price:
+			Number.isFinite(spr) && spr >= 0 ? spr : null,
 		is_asahi_customer: doc.is_asahi_customer === true,
 		inventory_vehicle_id: ref || null,
 		customer_name: String(doc.customer_name || "").trim(),
@@ -3306,6 +3373,12 @@ function workshopServiceMutationDoc(input, extras = {}) {
 		mechanic_firebase_uid: String(input.mechanic_firebase_uid || ""),
 		sales_firebase_uid: String(input.sales_firebase_uid || ""),
 		notes: String(input.notes || "").trim(),
+		service_price: (() => {
+			const sp = Number(input.service_price);
+			if (!Number.isFinite(sp) || sp < 0) return undefined;
+			if (sp === 0) return 0;
+			return Math.round(sp * 100) / 100;
+		})(),
 		status:
 			input.status === "completed" || input.status === "cancelled"
 				? input.status
@@ -3350,6 +3423,7 @@ export async function createWorkshopService(payload) {
 		...created,
 		_id: workshopServiceDocumentId(),
 	};
+	if (doc.service_price === undefined) delete doc.service_price;
 	if (!doc.inventory_vehicle) delete doc.inventory_vehicle;
 	await sanity.create(doc);
 	return doc._id;
@@ -3402,6 +3476,20 @@ export async function updateWorkshopService(id, patchInput) {
 			? { notes: String(patchInput.notes || "").trim() }
 			: {}),
 	};
+	if (
+		Object.prototype.hasOwnProperty.call(patchInput, "service_price") &&
+		patchInput.service_price != null &&
+		patchInput.service_price !== ""
+	) {
+		const sp = Number(patchInput.service_price);
+		setFields.service_price =
+			Number.isFinite(sp) && sp >= 0 ? Math.round(sp * 100) / 100 : 0;
+	} else if (
+		Object.prototype.hasOwnProperty.call(patchInput, "service_price") &&
+		(patchInput.service_price === null || patchInput.service_price === "")
+	) {
+		setFields.service_price = 0;
+	}
 	const statusNext =
 		patchInput.status !== undefined
 			? ["scheduled", "completed", "cancelled"].includes(patchInput.status)
@@ -3434,4 +3522,140 @@ export async function updateWorkshopService(id, patchInput) {
 	}
 
 	await patchChain.commit();
+}
+
+/** Full export for schedules PDF (no customer PII). */
+export async function fetchWorkshopServicesForPdfExport(limit = 3000) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const lim = Math.min(Math.max(Number(limit) || 3000, 1), 5000);
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService"] | order(scheduled_at asc) [0...${lim}]{
+       _id,
+       scheduled_at,
+       duration_minutes,
+       vehicle_make,
+       vehicle_model,
+       plate,
+       location,
+       status,
+       completed_at,
+       cancelled_at,
+       mechanic_firebase_uid,
+       sales_firebase_uid,
+       is_asahi_customer,
+       created_at,
+       created_by_firebase_uid,
+       created_by_name,
+       inventory_vehicle->{ _id, stock_id },
+       service_price,
+     }`,
+	);
+	return (docs || []).map(workshopPdfRowFromSanityDoc).filter(Boolean);
+}
+
+/** @internal */
+function workshopPdfRowFromSanityDoc(doc) {
+	if (!doc?._id) return null;
+	return {
+		id: doc._id,
+		scheduled_at: doc.scheduled_at || "",
+		duration_minutes:
+			typeof doc.duration_minutes === "number" ? doc.duration_minutes : 60,
+		vehicle_make: String(doc.vehicle_make || ""),
+		vehicle_model: String(doc.vehicle_model || ""),
+		plate: String(doc.plate || ""),
+		location: String(doc.location || ""),
+		status: ["scheduled", "completed", "cancelled"].includes(doc.status)
+			? doc.status
+			: "scheduled",
+		completed_at: doc.completed_at || "",
+		cancelled_at: doc.cancelled_at || "",
+		mechanic_firebase_uid: String(doc.mechanic_firebase_uid || ""),
+		sales_firebase_uid: String(doc.sales_firebase_uid || ""),
+		is_asahi_customer: doc.is_asahi_customer === true,
+		inventory_vehicle_ref: doc.inventory_vehicle?._id || "",
+		inventory_stock_id:
+			doc.inventory_vehicle?.stock_id != null
+				? String(doc.inventory_vehicle.stock_id)
+				: "",
+		service_price: (() => {
+			const sp = Number(doc.service_price);
+			return Number.isFinite(sp) && sp >= 0 ? sp : null;
+		})(),
+	};
+}
+
+export function deletionAuditDocumentId() {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return `deletionAudit.${crypto.randomUUID()}`;
+	}
+	return `deletionAudit.${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/**
+ * Permanently remove a workshop booking. Writes a deletionAudit snapshot (non-PII) then deletes the booking.
+ */
+export async function deleteWorkshopServicePermanently(serviceId, actor = {}) {
+	if (!sanity) throw new Error("Sanity not configured");
+	await ensureBootstrap();
+	const id = String(serviceId || "").trim();
+	if (!id) throw new Error("Missing booking id.");
+
+	const doc = await sanity.fetch(
+		`*[_type == "workshopService" && _id == $id][0]{
+       ...,
+       inventory_vehicle->{ _id, stock_id }
+    }`,
+		{ id },
+	);
+	if (!doc?._id) throw new Error("Booking not found or already deleted.");
+
+	const now = new Date().toISOString();
+	const snapshot = {
+		workshop_service_id: doc._id,
+		scheduled_at: doc.scheduled_at ?? null,
+		duration_minutes:
+			typeof doc.duration_minutes === "number" ? doc.duration_minutes : null,
+		vehicle_make: String(doc.vehicle_make ?? "").trim(),
+		vehicle_model: String(doc.vehicle_model ?? "").trim(),
+		plate: String(doc.plate ?? "").trim(),
+		location: String(doc.location ?? "").trim(),
+		status: ["scheduled", "completed", "cancelled"].includes(doc.status)
+			? doc.status
+			: "scheduled",
+		completed_at: doc.completed_at ?? null,
+		cancelled_at: doc.cancelled_at ?? null,
+		mechanic_firebase_uid: String(doc.mechanic_firebase_uid ?? ""),
+		sales_firebase_uid: String(doc.sales_firebase_uid ?? ""),
+		is_asahi_customer: doc.is_asahi_customer === true,
+		inventory_vehicle_ref: doc.inventory_vehicle?._id ?? null,
+		inventory_stock_id:
+			doc.inventory_vehicle?.stock_id != null
+				? String(doc.inventory_vehicle.stock_id)
+				: null,
+		created_at: doc.created_at ?? null,
+		updated_at: doc.updated_at ?? null,
+		created_by_firebase_uid: String(doc.created_by_firebase_uid ?? ""),
+		created_by_name: String(doc.created_by_name ?? "").trim(),
+		service_price: (() => {
+			const sp = Number(doc.service_price);
+			return Number.isFinite(sp) ? sp : null;
+		})(),
+	};
+
+	const audit = {
+		_type: "deletionAudit",
+		_id: deletionAuditDocumentId(),
+		resource_type: "workshopService",
+		resource_id: doc._id,
+		deleted_at: now,
+		deleted_by_firebase_uid: String(actor.firebase_uid || ""),
+		deleted_by_email: String(actor.email || ""),
+		deleted_by_display_name: String(actor.display_name || ""),
+		snapshot,
+	};
+
+	await sanity.transaction().create(audit).delete(doc._id).commit();
+	return { ok: true, auditId: audit._id };
 }

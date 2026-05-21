@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   History,
   CalendarClock,
+  FileDown,
+  Trash2,
 } from 'lucide-react'
 import {
   createWorkshopService,
@@ -21,8 +23,12 @@ import {
   fetchWorkshopServicesPastPage,
   countWorkshopServicesPast,
   fetchVehiclesForViewingBookingPicker,
+  fetchWorkshopServicesForPdfExport,
   updateWorkshopService,
+  deleteWorkshopServicePermanently,
+  fetchWorkshopServiceMonthTotals,
 } from '../lib/sanityData'
+import { buildWorkshopServicesListPdf } from '../lib/workshopServicesPdf'
 import { formatSanityMutationError } from '../lib/sanity'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
@@ -208,6 +214,26 @@ const emptyForm = {
   mechanic_firebase_uid: '',
   sales_firebase_uid: '',
   notes: '',
+  service_price: '',
+}
+
+/** @returns {number|undefined|null} Number, undefined when empty (omit), null when invalid */
+function parseOptionalServicePrice(display) {
+  const s = String(display ?? '').trim()
+  if (s === '') return undefined
+  const n = Number(s)
+  if (!Number.isFinite(n) || n < 0) return null
+  return Math.round(n * 100) / 100
+}
+
+function formatGbp(n) {
+  const x = Number(n)
+  if (!Number.isFinite(x)) return ''
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(x)
+  } catch {
+    return `£${x}`
+  }
 }
 
 function WorkshopDayModal({
@@ -218,6 +244,8 @@ function WorkshopDayModal({
   onEdit,
   onMarkComplete,
   canEdit,
+  canPermDelete,
+  onPermanentDelete,
 }) {
   if (!open || !ymd) return null
   const list = annotateOverlap(services || [])
@@ -289,6 +317,9 @@ function WorkshopDayModal({
                       {svc.duration_minutes ? (
                         <span className="text-zinc-600">· ~{svc.duration_minutes} min</span>
                       ) : null}
+                      {svc.service_price != null && Number(svc.service_price) >= 0 ? (
+                        <span className="text-emerald-400/90 tabular-nums"> · {formatGbp(svc.service_price)}</span>
+                      ) : null}
                     </p>
                     {svc.location ? (
                       <p className="text-zinc-500 text-[12px] mt-1">📍 {svc.location}</p>
@@ -326,6 +357,16 @@ function WorkshopDayModal({
                       >
                         <Pencil className="w-3.5 h-3.5" /> Edit
                       </button>
+                      {canPermDelete && onPermanentDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => onPermanentDelete(svc)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-500/55 text-red-300 text-xs hover:bg-red-500/10"
+                          title="Permanent delete — requires inventory delete permission"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -572,6 +613,21 @@ function ServiceEditorForm({
       </div>
 
       <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-zinc-400">Service cost (£)</span>
+        <input
+          type="number"
+          min={0}
+          step={0.01}
+          inputMode="decimal"
+          value={form.service_price}
+          onChange={(e) => setForm((f) => ({ ...f, service_price: e.target.value }))}
+          placeholder="Optional — set before or when marking done"
+          className="rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm px-3 py-2.5"
+        />
+        <span className="text-[11px] text-zinc-600">Recorded for monthly earnings on the calendar.</span>
+      </label>
+
+      <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-zinc-400">Comment / instructions</span>
         <textarea
           value={form.notes}
@@ -599,6 +655,7 @@ export function Services() {
 
   const canView = hasPermission('inventory:view')
   const canEdit = hasPermission('inventory:edit')
+  const canPermDelete = hasPermission('inventory:delete')
 
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()))
   const [calendarRows, setCalendarRows] = useState([])
@@ -628,7 +685,26 @@ export function Services() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [pdfExporting, setPdfExporting] = useState(false)
+
   const [modalYmd, setModalYmd] = useState(null)
+  const [monthTotals, setMonthTotals] = useState(null)
+
+  useEffect(() => {
+    if (!canView) return undefined
+    let cancelled = false
+    setMonthTotals(null)
+    fetchWorkshopServiceMonthTotals(viewMonth.getFullYear(), viewMonth.getMonth())
+      .then((t) => {
+        if (!cancelled) setMonthTotals(t)
+      })
+      .catch(() => {
+        if (!cancelled) setMonthTotals(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [canView, viewMonth])
 
   const loadCalendar = useCallback(async () => {
     if (!canView) return
@@ -692,6 +768,61 @@ export function Services() {
   const refreshAfterMutation = useCallback(async () => {
     await Promise.all([loadCalendar(), loadActive(), loadPast()])
   }, [loadCalendar, loadActive, loadPast])
+
+  async function exportServicesPdf() {
+    if (!canView) return
+    try {
+      setPdfExporting(true)
+      const [rows, profiles] = await Promise.all([
+        fetchWorkshopServicesForPdfExport(),
+        fetchAllUserProfiles(),
+      ])
+      buildWorkshopServicesListPdf(rows, profiles || [])
+      addNotification(
+        'Workshop PDF downloaded (schedule only — customer contacts omitted).',
+        'success',
+      )
+    } catch (e) {
+      addNotification(formatSanityMutationError(e) || 'PDF export failed.', 'error')
+    } finally {
+      setPdfExporting(false)
+    }
+  }
+
+  async function purgeService(svc) {
+    if (!canPermDelete || !svc?.id || !user?.uid) return
+    const confirmed = window.confirm(
+      'Permanently delete this workshop booking?\n\nThis cannot be undone. Customer and contact fields on the booking are removed.\nAn audit record saves who deleted it (non-sensitive operational snapshot only).',
+    )
+    if (!confirmed) return
+    try {
+      setSaving(true)
+      await deleteWorkshopServicePermanently(svc.id, {
+        firebase_uid: user.uid,
+        email: profile?.email || user.email || '',
+        display_name:
+          profile?.display_name ||
+          user.displayName ||
+          profile?.email ||
+          user.email ||
+          '',
+      })
+      addNotification('Booking permanently deleted.', 'info')
+      if (editing?.id === svc.id) {
+        setEditing(null)
+        setForm({
+          ...emptyForm,
+          scheduled_local: toDatetimeLocal(new Date().toISOString()),
+        })
+      }
+      setModalYmd(null)
+      await refreshAfterMutation()
+    } catch (e) {
+      addNotification(formatSanityMutationError(e) || 'Could not delete booking.', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     loadCalendar()
@@ -822,6 +953,7 @@ export function Services() {
       mechanic_firebase_uid: svc.mechanic_firebase_uid || '',
       sales_firebase_uid: svc.sales_firebase_uid || '',
       notes: svc.notes || '',
+      service_price: svc.service_price != null && svc.service_price !== '' ? String(svc.service_price) : '',
     })
   }
 
@@ -833,6 +965,19 @@ export function Services() {
     }
 
     const duration = Math.max(Number(form.duration_minutes) || 60, 15)
+    const svcPriceParsed = parseOptionalServicePrice(form.service_price)
+    if (svcPriceParsed === null && String(form.service_price ?? '').trim() !== '') {
+      addNotification('Service cost must be zero or a positive number.', 'error')
+      return
+    }
+
+    /** @type {string|undefined|number} */
+    let priceForMutation = undefined
+    if (String(form.service_price ?? '').trim() === '') {
+      priceForMutation = editing?.id ? '' : undefined
+    } else if (svcPriceParsed !== undefined) {
+      priceForMutation = svcPriceParsed
+    }
 
     try {
       setSaving(true)
@@ -853,6 +998,7 @@ export function Services() {
           sales_firebase_uid: form.sales_firebase_uid,
           notes: form.notes.trim(),
           status: editing.status || 'scheduled',
+          ...(priceForMutation !== undefined ? { service_price: priceForMutation } : {}),
         })
         addNotification('Service updated.', 'info')
       } else {
@@ -873,6 +1019,7 @@ export function Services() {
           notes: form.notes,
           created_by_firebase_uid: user?.uid || '',
           created_by_name: profile?.display_name || user?.displayName || user?.email || '',
+          ...(priceForMutation !== undefined ? { service_price: priceForMutation } : {}),
         })
         addNotification('Service scheduled.', 'info')
       }
@@ -945,7 +1092,54 @@ export function Services() {
             Mark jobs <strong className="text-zinc-400 font-medium">Done</strong> once the service day is reached (they move to Past). Reschedule changes the date while the booking stays active. Calendar counts only open bookings.
           </p>
         </div>
+        {canView ? (
+          <button
+            type="button"
+            onClick={exportServicesPdf}
+            disabled={pdfExporting}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:pointer-events-none text-white text-sm font-semibold border border-emerald-500 shrink-0"
+          >
+            {pdfExporting ? (
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+            ) : (
+              <FileDown className="w-4 h-4 shrink-0" aria-hidden />
+            )}
+            Export PDF (no customer details)
+          </button>
+        ) : null}
       </div>
+
+      {canView ? (
+        <div className="mb-6 rounded-xl border border-emerald-500/25 bg-emerald-950/30 px-4 py-3">
+          {!monthTotals ? (
+            <p className="text-sm text-zinc-500">
+              Loading {formatMonthTitle(viewMonth)} totals…
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-emerald-300/95 uppercase tracking-wide">
+                This calendar month ({formatMonthTitle(viewMonth)})
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-200">
+                <span>
+                  <span className="text-zinc-500">Completed</span>{' '}
+                  <strong className="text-white tabular-nums">{formatGbp(monthTotals.completedRevenue)}</strong>{' '}
+                  <span className="text-zinc-500">({monthTotals.completedCount} job{monthTotals.completedCount === 1 ? '' : 's'})</span>
+                </span>
+                <span className="text-zinc-600 hidden sm:inline">·</span>
+                <span>
+                  <span className="text-zinc-500">Scheduled pipeline</span>{' '}
+                  <strong className="text-emerald-100 tabular-nums">{formatGbp(monthTotals.pipelineRevenue)}</strong>{' '}
+                  <span className="text-zinc-500">({monthTotals.scheduledCount} booking{monthTotals.scheduledCount === 1 ? '' : 's'})</span>
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-600 leading-snug">
+                Totals use each booking&apos;s diary date (<span className="text-zinc-500">scheduled_at</span>) and logged service cost.
+              </p>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <div className="grid lg:grid-cols-[1fr_300px] gap-8 lg:gap-10 items-start">
         <section className="space-y-6 order-2 lg:order-1">
@@ -1000,6 +1194,16 @@ export function Services() {
                       className="text-[11px] px-3 py-1.5 rounded-lg border border-red-500/50 text-red-300 hover:bg-red-500/10"
                     >
                       Mark cancelled
+                    </button>
+                  ) : null}
+                  {canPermDelete ? (
+                    <button
+                      type="button"
+                      disabled={saving || !editing?.id}
+                      onClick={() => purgeService(editing)}
+                      className="text-[11px] px-3 py-1.5 rounded-lg border border-red-600/50 text-red-300 hover:bg-red-500/12 disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      Delete permanently…
                     </button>
                   ) : null}
                   <button
@@ -1107,12 +1311,17 @@ export function Services() {
                                           overlap
                                         </span>
                                       ) : null}
+                                      {svc.service_price != null && Number(svc.service_price) >= 0 ? (
+                                        <span className="ml-2 text-emerald-400/85 tabular-nums text-[11px]">
+                                          {formatGbp(svc.service_price)}
+                                        </span>
+                                      ) : null}
                                     </span>
                                   </div>
                                 </button>
-                                {canEdit ? (
+                                {(canEdit || canPermDelete) ? (
                                   <div className="flex flex-wrap items-center gap-1.5 shrink-0 justify-end">
-                                    {isServiceDateReached(svc.scheduled_at) ? (
+                                    {canEdit && isServiceDateReached(svc.scheduled_at) ? (
                                       <button
                                         type="button"
                                         disabled={saving}
@@ -1123,20 +1332,34 @@ export function Services() {
                                         Done
                                       </button>
                                     ) : null}
-                                    <button
-                                      type="button"
-                                      disabled={saving}
-                                      onClick={() => {
-                                        setTab('active')
-                                        setEditing(svc)
-                                        hydrateFormFromSvc(svc)
-                                        window.scrollTo({ top: 0, behavior: 'smooth' })
-                                      }}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 text-[11px] font-medium border border-amber-500/25"
-                                    >
-                                      <CalendarClock className="w-3 h-3" />
-                                      Reschedule
-                                    </button>
+                                    {canEdit ? (
+                                      <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => {
+                                          setTab('active')
+                                          setEditing(svc)
+                                          hydrateFormFromSvc(svc)
+                                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 text-[11px] font-medium border border-amber-500/25"
+                                      >
+                                        <CalendarClock className="w-3 h-3" />
+                                        Reschedule
+                                      </button>
+                                    ) : null}
+                                    {canPermDelete ? (
+                                      <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => purgeService(svc)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-950/40 text-red-300 text-[11px] font-medium border border-red-500/35 hover:bg-red-500/10 disabled:opacity-50"
+                                        title="Permanent delete — requires inventory delete permission"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        Delete
+                                      </button>
+                                    ) : null}
                                   </div>
                                 ) : null}
                               </div>
@@ -1185,29 +1408,49 @@ export function Services() {
                               key={svc.id}
                               className="rounded-xl border border-zinc-800/60 bg-zinc-900/35 px-3 py-2.5 text-sm"
                             >
-                              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                <span className="text-zinc-200 font-medium">{svc.customer_name}</span>
-                                <span
-                                  className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded ${
-                                    svc.status === 'completed'
-                                      ? 'bg-emerald-500/15 text-emerald-400'
-                                      : 'bg-zinc-700/50 text-zinc-400'
-                                  }`}
-                                >
-                                  {svc.status}
-                                </span>
-                              </div>
-                              <p className="text-zinc-500 text-[13px] mt-1">
-                                {vehicleLabel || 'Vehicle'}
-                                {svc.plate ? (
-                                  <span className="text-zinc-600 font-mono ml-1">· {svc.plate}</span>
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <span className="text-zinc-200 font-medium">{svc.customer_name}</span>
+                                    <span
+                                      className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded ${
+                                        svc.status === 'completed'
+                                          ? 'bg-emerald-500/15 text-emerald-400'
+                                          : 'bg-zinc-700/50 text-zinc-400'
+                                      }`}
+                                    >
+                                      {svc.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-zinc-500 text-[13px] mt-1">
+                                    {vehicleLabel || 'Vehicle'}
+                                    {svc.plate ? (
+                                      <span className="text-zinc-600 font-mono ml-1">· {svc.plate}</span>
+                                    ) : null}
+                                  </p>
+                                  {svc.service_price != null && Number(svc.service_price) >= 0 ? (
+                                    <p className="text-[11px] text-emerald-400/85 tabular-nums mt-0.5">
+                                      Cost {formatGbp(svc.service_price)}
+                                    </p>
+                                  ) : null}
+                                  <p className="text-[11px] text-zinc-600 mt-1.5">
+                                    Scheduled {fmtDateTimeLocal(svc.scheduled_at)}
+                                    {svc.location ? ` · ${svc.location}` : ''}
+                                  </p>
+                                  <p className="text-[11px] text-zinc-500 mt-0.5">{endReason}</p>
+                                </div>
+                                {canPermDelete ? (
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => purgeService(svc)}
+                                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-red-500/35 text-red-300 text-[11px] font-medium hover:bg-red-500/10 shrink-0 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Purge
+                                  </button>
                                 ) : null}
-                              </p>
-                              <p className="text-[11px] text-zinc-600 mt-1.5">
-                                Scheduled {fmtDateTimeLocal(svc.scheduled_at)}
-                                {svc.location ? ` · ${svc.location}` : ''}
-                              </p>
-                              <p className="text-[11px] text-zinc-500 mt-0.5">{endReason}</p>
+                              </div>
                             </li>
                           )
                         })}
@@ -1312,6 +1555,8 @@ export function Services() {
           setModalYmd(null)
           window.scrollTo({ top: 0, behavior: 'smooth' })
         }}
+        canPermDelete={canPermDelete}
+        onPermanentDelete={purgeService}
       />
     </div>
   )

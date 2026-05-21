@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { patchVehicleFields } from '../lib/sanityData'
 import { linesToReservationConditions } from '../lib/reservationConditions'
 import { serializePdiForStorage, seedPdiFromVehicleAndCustomer } from '../lib/pdiInspectionModel'
+import { decimalToDisplayComma, parseCommaDecimal, formatTypingMoney } from '../lib/numberFormat'
 import { Lock, X, Plus } from 'lucide-react'
 
 const inputClass = 'w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent'
@@ -16,6 +17,13 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
     customer_phone: '',
     deposit_amount: '0',
     deposit_agreement_url: '',
+    agreed_deal_price: (() => {
+      if (vehicle?.agreed_deal_price != null && vehicle.agreed_deal_price !== '')
+        return decimalToDisplayComma(vehicle.agreed_deal_price)
+      if (vehicle?.selling_price != null && vehicle.selling_price !== '')
+        return decimalToDisplayComma(vehicle.selling_price)
+      return ''
+    })(),
     carplay_included: false,
     reserved_date: new Date().toISOString().slice(0, 10),
     conditionLines: [''],
@@ -81,6 +89,7 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
         pdi_inspection_json: serializePdiForStorage(
           seedPdiFromVehicleAndCustomer(vehicle, { customer_name: form.customer_name })
         ),
+        agreed_deal_price: parseCommaDecimal(form.agreed_deal_price),
       }
       await patchVehicleFields(vehicle.id, payload)
       onSuccess?.()
@@ -168,6 +177,18 @@ export function ReserveModal({ vehicle, onClose, onSuccess }) {
               type="date"
               value={form.reserved_date}
               onChange={(e) => update('reserved_date', e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Agreed deal price (£)</label>
+            <p className="text-[11px] text-zinc-500 mb-1.5">Final sale amount if negotiated below the listed price.</p>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.agreed_deal_price}
+              onChange={(e) => update('agreed_deal_price', formatTypingMoney(e.target.value, { treatTrailingDot: true }))}
+              placeholder="Usually matches or differs from list price"
               className={inputClass}
             />
           </div>
