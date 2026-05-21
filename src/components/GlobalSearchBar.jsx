@@ -36,7 +36,7 @@ function vehicleSubtitle(v) {
 	return bits.filter(Boolean).join(" · ");
 }
 
-/** Sticky omnibar — vehicles, CRM contacts on stock, workshop services, team (scoped by permissions). */
+/** Omnibar — vehicles, CRM contacts on stock, workshop services, team (scoped by permissions). Sticky positioning is controlled in Layout (Overview only). */
 export function GlobalSearchBar() {
 	const navigate = useNavigate();
 	const { hasPermission } = useAuth();

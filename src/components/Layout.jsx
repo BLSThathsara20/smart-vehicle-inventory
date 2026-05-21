@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
 import { Footer } from "./Footer";
@@ -8,11 +8,16 @@ import { GlobalSearchBar } from "./GlobalSearchBar";
 import { useAuth } from "../context/AuthContext";
 
 export function Layout() {
+	const { pathname } = useLocation();
 	const { hasPermission } = useAuth();
 	const showCommandSearch =
 		hasPermission("search:view") ||
 		hasPermission("inventory:view") ||
 		hasPermission("users:manage");
+	/** Sticky omnibar only on Dashboard / Overview (`/app`); elsewhere it scrolls with the page */
+	const omnibarSticky =
+		pathname === "/app" ||
+		pathname === "/app/";
 
 	return (
 		<div className="min-h-screen bg-zinc-950 text-white md:flex">
@@ -23,7 +28,11 @@ export function Layout() {
 					<NotificationBell />
 				</div>
 				{showCommandSearch ? (
-					<div className="print:hidden isolate shrink-0 sticky top-0 z-[110] overflow-visible border-b border-zinc-800/55 bg-zinc-950 backdrop-blur-md">
+					<div
+						className={`print:hidden isolate shrink-0 z-[110] overflow-visible border-b border-zinc-800/55 bg-zinc-950 backdrop-blur-md ${
+							omnibarSticky ? "sticky top-0" : ""
+						}`}
+					>
 						<div className="w-full max-w-lg md:max-w-5xl mx-auto px-4 pr-14 md:px-6 md:pr-20 py-3">
 							<GlobalSearchBar />
 						</div>
