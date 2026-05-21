@@ -4,7 +4,7 @@ A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (
 
 ## Features
 
-- Vehicle inventory with dealer-oriented fields, reservation workflow (reserved → **fresh full service** → PDI → delivery → handover), customer pickup links
+- Vehicle inventory with dealer-oriented fields, reservation workflow (reserved → **fresh full service** → PDI → collection date → manager ready-to-pickup → handover), customer pickup links
 - **Firebase** – Google sign-in and email/password; password reset via email
 - **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
 - **ImgBB** – vehicle photos stored as URLs on each vehicle document
@@ -87,6 +87,21 @@ defineField({
   title: 'Pickup page — important notice',
   type: 'text',
   rows: 4,
+}),
+```
+
+Customers can optionally confirm attendance on their **planned collection date** via the `/pickup/:token` page (writes **`customer_collection_confirmed_at`** and optional **`customer_collection_time_note`**; same plate/stock gate as cancelling when those apply). Staff see this on **Reservation workflow** beside **Delivery scheduled**, and under vehicle details:
+
+```ts
+defineField({
+  name: 'customer_collection_confirmed_at',
+  title: 'Customer acknowledged collection date (pickup link)',
+  type: 'datetime',
+}),
+defineField({
+  name: 'customer_collection_time_note',
+  title: 'Customer rough arrival time / note',
+  type: 'string',
 }),
 ```
 

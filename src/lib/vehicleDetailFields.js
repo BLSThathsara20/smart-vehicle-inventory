@@ -61,6 +61,16 @@ export const DETAIL_SECTIONS = [
       },
       { key: 'planned_collection_date', label: 'Planned collection', format: (v) => (v ? new Date(v).toLocaleDateString() : 'Not added') },
       {
+        key: 'customer_collection_confirmed_at',
+        label: 'Customer confirmed arrival intent',
+        format: (v) => (v ? new Date(v).toLocaleString() : 'Not yet'),
+      },
+      {
+        key: 'customer_collection_time_note',
+        label: 'Customer rough arrival note',
+        format: (v) => (v && String(v).trim() ? String(v).trim() : 'None'),
+      },
+      {
         key: 'pickup_important_notice',
         label: 'Pickup page notice',
         format: (v) => (v && String(v).trim() ? String(v).trim() : 'None'),

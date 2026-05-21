@@ -316,6 +316,42 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
                       <span className="text-[10px] text-zinc-500">Add or change delivery date anytime</span>
                     </div>
                   )}
+                  {step.key === 'delivery' &&
+                    vehicle?.reserved &&
+                    vehicle?.customer_collection_confirmed_at && (
+                      <div className="mt-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2">
+                        <p className="text-[11px] font-medium text-emerald-300 uppercase tracking-wide">
+                          Customer acknowledged collection date
+                        </p>
+                        <p className="text-xs text-emerald-200/95 mt-1">
+                          Via pickup link{' '}
+                          {vehicle.customer_collection_time_note?.trim()
+                            ? ` · rough arrival time: "${vehicle.customer_collection_time_note.trim()}"`
+                            : ''}
+                          <span className="text-zinc-500 block mt-0.5">
+                            Logged{' '}
+                            {new Date(vehicle.customer_collection_confirmed_at).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  {step.key === 'delivery' && done && !updates.ready_to_pickup && canEdit && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={managerApproveReadyToPickup}
+                        disabled={updatingStep === 'ready_to_pickup'}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium disabled:opacity-50 border border-amber-500/50"
+                      >
+                        {updatingStep === 'ready_to_pickup' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                        Manager Approve — Ready to pickup
+                      </button>
+                      <p className="text-[10px] text-zinc-500 mt-1">After delivery is scheduled · confirms vehicle cleared for customer collection</p>
+                    </div>
+                  )}
                   {step.key === 'pdi' && done && !updates.pdi_approved && canEdit && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
@@ -337,20 +373,6 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
                         Undo PDI
                       </button>
                       <p className="text-[10px] text-zinc-500 mt-1 w-full">Approve before customer sees PDI complete. Undo to redo inspection.</p>
-                    </div>
-                  )}
-                  {step.key === 'ready' && done && !updates.ready_to_pickup && canEdit && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={managerApproveReadyToPickup}
-                        disabled={updatingStep === 'ready_to_pickup'}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium disabled:opacity-50 border border-amber-500/50"
-                      >
-                        {updatingStep === 'ready_to_pickup' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                        Manager Approve — Ready to pickup
-                      </button>
-                      <p className="text-[10px] text-zinc-500 mt-1">Confirm vehicle is ready for customer collection</p>
                     </div>
                   )}
                   {canEdit && !done && inProgress && !step.internalOnly && (

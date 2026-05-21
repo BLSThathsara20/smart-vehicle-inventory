@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchVehicleByPickupToken, fetchWorkflowUpdates } from '../lib/sanityData'
+import { fetchVehicleByPickupToken, fetchWorkflowUpdates, patchCustomerCollectionConfirmationFromPickup } from '../lib/sanityData'
 import {
   verificationMatches,
   pickupVerifiedStorageKey,
+  pickupNeedsPlateOrStockVerification,
+  CUSTOMER_COLLECTION_NOTE_MAX,
 } from '../lib/pickupVerification'
 import {
   CUSTOMER_VISIBLE_STEPS,
@@ -28,6 +30,7 @@ import {
 import { Footer } from '../components/Footer'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { LoadingState } from '../components/LoadingState'
+import { useNotification } from '../context/NotificationContext'
 
 const ICONS = {
   Lock,
@@ -41,6 +44,7 @@ const ICONS = {
 
 export function CustomerPickup() {
   const { token } = useParams()
+  const { addNotification } = useNotification()
   const [vehicle, setVehicle] = useState(null)
   const [workflow, setWorkflow] = useState({})
   const [loading, setLoading] = useState(true)
@@ -49,6 +53,8 @@ export function CustomerPickup() {
   const [plateInput, setPlateInput] = useState('')
   const [plateError, setPlateError] = useState('')
   const [pickupLoadMessage, setPickupLoadMessage] = useState('Looking up your vehicle…')
+  const [arrivalNote, setArrivalNote] = useState('')
+  const [confirmBusy, setConfirmBusy] = useState(false)
   useEffect(() => {
     if (!token) {
       setNotFound(true)
@@ -57,6 +63,37 @@ export function CustomerPickup() {
     }
     fetchVehicleAndStatus()
   }, [token])
+
+  async function handleConfirmCollection(ev) {
+    ev?.preventDefault?.()
+    if (!token || !vehicle?.planned_collection_date) return
+    setConfirmBusy(true)
+    try {
+      let cred = ''
+      if (pickupNeedsPlateOrStockVerification(vehicle)) {
+        cred =
+          typeof localStorage !== 'undefined'
+            ? localStorage.getItem(pickupVerifiedStorageKey(token)) || ''
+            : ''
+        if (!cred) {
+          addNotification(
+            'This link needs your plate or stock ID again — unlock the page below, then try confirming.',
+            'error',
+          )
+          return
+        }
+      }
+      await patchCustomerCollectionConfirmationFromPickup(token, cred, {
+        timeNote: arrivalNote,
+      })
+      addNotification('Thank you — your dealer has your confirmation.', 'success')
+      await fetchVehicleAndStatus()
+    } catch (err) {
+      addNotification(err?.message || 'Could not save confirmation', 'error')
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
 
   async function fetchVehicleAndStatus() {
     setLoading(true)
@@ -91,6 +128,11 @@ export function CustomerPickup() {
         if (!byStep[u.step_key]) byStep[u.step_key] = u
       })
       setWorkflow(byStep)
+      setArrivalNote(
+        typeof vehicleData.customer_collection_time_note === 'string'
+          ? vehicleData.customer_collection_time_note.trim()
+          : ''
+      )
     } catch {
       setNotFound(true)
     } finally {
@@ -219,6 +261,67 @@ export function CustomerPickup() {
             <p className="text-amber-400 font-bold text-lg">
               {new Date(vehicle.planned_collection_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
+          </div>
+        )}
+
+        {plateVerified && vehicle.planned_collection_date && (
+          <div className="mb-6 rounded-2xl border border-emerald-500/35 bg-emerald-950/20 px-4 py-4 shadow-inner shadow-black/10">
+            <div className="flex items-start gap-3">
+              <Calendar className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" aria-hidden />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-400/95">
+                    Confirm you can make this date (optional arrival time)
+                  </p>
+                  <p className="text-[13px] text-zinc-400 mt-2 leading-relaxed">
+                    Let us know you&apos;re aiming to collect on{' '}
+                    <span className="text-emerald-200 font-medium">
+                      {new Date(vehicle.planned_collection_date).toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    . Your sales team sees this here and on the reservation workflow — same safeguards as unlocking this link
+                    {pickupNeedsPlateOrStockVerification(vehicle) ? ' (plate/stock required again when saving).' : '.'}
+                  </p>
+                  {vehicle.customer_collection_confirmed_at ? (
+                    <p className="text-xs text-emerald-400/95 mt-2">
+                      Latest confirmation logged{' '}
+                      {new Date(vehicle.customer_collection_confirmed_at).toLocaleString(undefined, {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                      .
+                    </p>
+                  ) : null}
+                </div>
+                <form onSubmit={handleConfirmCollection} className="space-y-2 pt-1">
+                  <label className="block text-[11px] text-zinc-500 uppercase tracking-wider" htmlFor="pickup-arrival-note">
+                    Rough arrival time{' '}
+                    <span className="text-zinc-600 font-normal lowercase normal-case">(optional)</span>
+                  </label>
+                  <input
+                    id="pickup-arrival-note"
+                    type="text"
+                    maxLength={CUSTOMER_COLLECTION_NOTE_MAX}
+                    value={arrivalNote}
+                    onChange={(e) => setArrivalNote(e.target.value)}
+                    placeholder='e.g. "around 11am"'
+                    autoComplete="off"
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder-zinc-600 focus:ring-2 focus:ring-emerald-500/40"
+                  />
+                  <button
+                    type="submit"
+                    disabled={confirmBusy}
+                    className="w-full sm:w-auto inline-flex justify-center px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-45 text-white text-sm font-semibold transition border border-emerald-500"
+                  >
+                    {confirmBusy ? 'Saving…' : vehicle.customer_collection_confirmed_at ? 'Update confirmation' : 'Confirm I can attend on this date'}
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         )}
 

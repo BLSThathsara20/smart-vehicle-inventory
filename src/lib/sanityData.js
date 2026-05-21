@@ -8,6 +8,7 @@ import { deserializePdiFromStorage, serializePdiForStorage } from "./pdiInspecti
 import {
 	verificationMatches,
 	pickupNeedsPlateOrStockVerification,
+	sanitizeCustomerCollectionNote,
 } from "./pickupVerification";
 
 /** Permission bundles for seeded / ensured built-in roles (single source of truth). */
@@ -943,8 +944,53 @@ export async function cancelCustomerReservationByPickupToken(
 		planned_collection_date: null,
 		pickup_important_notice: null,
 		pdi_inspection_json: null,
+		customer_collection_confirmed_at: null,
+		customer_collection_time_note: null,
 	});
 	await deleteReservationWorkflowUpdatesForVehicle(vehicle.id);
+}
+
+/**
+ * Customer confirms they'll attend collection on the currently planned date (pickup token link).
+ * Verifies plate/stock when required (same barrier as cancelling). Does not mutate planned_collection_date.
+ */
+export async function patchCustomerCollectionConfirmationFromPickup(
+	token,
+	verifiedCredential,
+	{ timeNote } = {},
+) {
+	if (!sanity) throw new Error("Sanity not configured");
+	if (!token || !String(token).trim()) throw new Error("Invalid link");
+
+	const vehicle = await fetchVehicleByPickupToken(token);
+	if (!vehicle?.id)
+		throw new Error("Reservation not found or link is no longer valid");
+	if (!vehicle.reserved || vehicle.sold)
+		throw new Error("This reservation cannot be updated here");
+
+	if (!vehicle.planned_collection_date) {
+		throw new Error(
+			"No collection date is set yet. Please speak to your sales contact.",
+		);
+	}
+
+	const needsVerify = pickupNeedsPlateOrStockVerification(vehicle);
+	const cred = String(verifiedCredential ?? "").trim();
+	if (needsVerify) {
+		if (!cred || !verificationMatches(cred, vehicle)) {
+			throw new Error(
+				"Enter the same plate number or stock ID used to unlock this page.",
+			);
+		}
+	}
+
+	const safeNote =
+		timeNote !== undefined ? sanitizeCustomerCollectionNote(timeNote) : "";
+
+	await patchVehicleFields(vehicle.id, {
+		customer_collection_confirmed_at: new Date().toISOString(),
+		customer_collection_time_note: safeNote !== "" ? safeNote : null,
+	});
 }
 
 export async function fetchVehicleLocations(query) {

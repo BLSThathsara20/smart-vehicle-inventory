@@ -428,7 +428,13 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
               ),
             }
           : {}),
-        ...(vehicle?.id && vehicle.reserved && !reserved ? { pdi_inspection_json: null } : {}),
+        ...(vehicle?.id && vehicle.reserved && !reserved
+          ? {
+              pdi_inspection_json: null,
+              customer_collection_confirmed_at: null,
+              customer_collection_time_note: null,
+            }
+          : {}),
       }
 
       const newImageUrls =
