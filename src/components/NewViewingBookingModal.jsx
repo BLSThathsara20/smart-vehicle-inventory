@@ -132,6 +132,19 @@ export function NewViewingBookingModal({ open, onClose, onBooked }) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open || !selectedId || !selectedVehicle) return
+    if (selectedVehicle.sold) {
+      addNotification('That vehicle was sold — pick another for a new viewing.', 'warning')
+      setSelectedId(null)
+      return
+    }
+    if (selectedVehicle.reserved) {
+      addNotification('That vehicle is reserved — new viewings cannot be booked here.', 'warning')
+      setSelectedId(null)
+    }
+  }, [open, selectedId, selectedVehicle, addNotification])
+
   const bookable =
     canBook &&
     selectedVehicle &&
@@ -149,7 +162,22 @@ export function NewViewingBookingModal({ open, onClose, onBooked }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!bookable || !selectedId || submitting) return
+    if (!canBook || submitting) return
+    if (!selectedId) {
+      addNotification('Pick a vehicle first', 'error')
+      return
+    }
+    if (selectedVehicle?.sold) {
+      addNotification('Sold vehicles cannot have new viewing appointments.', 'error')
+      return
+    }
+    if (selectedVehicle?.reserved) {
+      addNotification(
+        'This vehicle is reserved — choose another vehicle or release the reservation first.',
+        'error',
+      )
+      return
+    }
     const scheduled_at = fromDatetimeLocal(form.scheduled_local)
     if (!scheduled_at) {
       addNotification('Pick a date and time for the viewing', 'error')

@@ -266,7 +266,7 @@ export function CustomerPickup() {
                     Confirm you can make this date
                   </p>
                   <p className="text-[13px] text-zinc-400 mt-2 leading-relaxed">
-                    Let us know you&apos;re aiming to collect on{' '}
+                    Tap confirm below if you plan to collect on{' '}
                     <span className="text-emerald-200 font-medium">
                       {new Date(vehicle.planned_collection_date).toLocaleDateString(undefined, {
                         weekday: 'long',
@@ -275,8 +275,10 @@ export function CustomerPickup() {
                         year: 'numeric',
                       })}
                     </span>
-                    . Your sales team sees this here and on the reservation workflow — same safeguards as unlocking this link
-                    {pickupNeedsPlateOrStockVerification(vehicle) ? ' (plate/stock required again when saving).' : '.'}
+                    .
+                    {pickupNeedsPlateOrStockVerification(vehicle)
+                      ? ' Saving may ask you to verify your plate or stock ID again, like when you opened this link.'
+                      : ''}
                   </p>
                   {vehicle.customer_collection_confirmed_at ? (
                     <p className="text-xs text-emerald-400/95 mt-2">

@@ -1181,10 +1181,18 @@ export async function addVehicleViewingBooking(vehicleId, input, meta = {}) {
 	if (!sanity) throw new Error("Sanity not configured");
 	const payload = sanitizeViewingBookingPayload(input);
 	const v = await sanity.fetch(
-		`*[_type == "vehicle" && _id == $id][0]{ viewing_bookings }`,
+		`*[_type == "vehicle" && _id == $id][0]{ viewing_bookings, reserved, sold }`,
 		{ id: vehicleId },
 	);
 	if (!v) throw new Error("Vehicle not found");
+	if (v.sold === true) {
+		throw new Error("Sold vehicles cannot have new viewing appointments booked.");
+	}
+	if (v.reserved === true) {
+		throw new Error(
+			"This vehicle is reserved — new viewings cannot be booked here.",
+		);
+	}
 	const existing = Array.isArray(v.viewing_bookings) ? v.viewing_bookings : [];
 	const _key = newViewingBookingKey();
 	const row = {
