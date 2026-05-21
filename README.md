@@ -129,18 +129,13 @@ defineField({
 }),
 ```
 
-Customers can optionally confirm attendance on their **planned collection date** via the `/pickup/:token` page (writes **`customer_collection_confirmed_at`** and optional **`customer_collection_time_note`**; same plate/stock gate as cancelling when those apply). Staff see this on **Reservation workflow** beside **Delivery scheduled**, and under vehicle details:
+Customers can optionally confirm attendance on their **planned collection date** via the `/pickup/:token` page (writes **`customer_collection_confirmed_at`**; same plate/stock gate as cancelling when those apply). Staff see this on **Reservation workflow** beside **Delivery scheduled**, and under vehicle details:
 
 ```ts
 defineField({
   name: 'customer_collection_confirmed_at',
   title: 'Customer acknowledged collection date (pickup link)',
   type: 'datetime',
-}),
-defineField({
-  name: 'customer_collection_time_note',
-  title: 'Customer rough arrival time / note',
-  type: 'string',
 }),
 ```
 

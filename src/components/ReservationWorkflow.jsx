@@ -324,10 +324,7 @@ export function ReservationWorkflow({ vehicleId, vehicle, canEdit, onUpdate }) {
                           Customer acknowledged collection date
                         </p>
                         <p className="text-xs text-emerald-200/95 mt-1">
-                          Via pickup link{' '}
-                          {vehicle.customer_collection_time_note?.trim()
-                            ? ` · rough arrival time: "${vehicle.customer_collection_time_note.trim()}"`
-                            : ''}
+                          Via pickup link
                           <span className="text-zinc-500 block mt-0.5">
                             Logged{' '}
                             {new Date(vehicle.customer_collection_confirmed_at).toLocaleString(undefined, {

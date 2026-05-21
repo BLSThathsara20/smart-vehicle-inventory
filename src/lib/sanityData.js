@@ -8,7 +8,6 @@ import { deserializePdiFromStorage, serializePdiForStorage } from "./pdiInspecti
 import {
 	verificationMatches,
 	pickupNeedsPlateOrStockVerification,
-	sanitizeCustomerCollectionNote,
 } from "./pickupVerification";
 
 /** Permission bundles for seeded / ensured built-in roles (single source of truth). */
@@ -954,11 +953,11 @@ export async function cancelCustomerReservationByPickupToken(
 /**
  * Customer confirms they'll attend collection on the currently planned date (pickup token link).
  * Verifies plate/stock when required (same barrier as cancelling). Does not mutate planned_collection_date.
+ * Clears legacy `customer_collection_time_note` (no longer collected from customers).
  */
 export async function patchCustomerCollectionConfirmationFromPickup(
 	token,
 	verifiedCredential,
-	{ timeNote } = {},
 ) {
 	if (!sanity) throw new Error("Sanity not configured");
 	if (!token || !String(token).trim()) throw new Error("Invalid link");
@@ -985,12 +984,9 @@ export async function patchCustomerCollectionConfirmationFromPickup(
 		}
 	}
 
-	const safeNote =
-		timeNote !== undefined ? sanitizeCustomerCollectionNote(timeNote) : "";
-
 	await patchVehicleFields(vehicle.id, {
 		customer_collection_confirmed_at: new Date().toISOString(),
-		customer_collection_time_note: safeNote !== "" ? safeNote : null,
+		customer_collection_time_note: null,
 	});
 }
 

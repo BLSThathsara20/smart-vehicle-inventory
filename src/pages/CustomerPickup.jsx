@@ -5,7 +5,6 @@ import {
   verificationMatches,
   pickupVerifiedStorageKey,
   pickupNeedsPlateOrStockVerification,
-  CUSTOMER_COLLECTION_NOTE_MAX,
 } from '../lib/pickupVerification'
 import {
   CUSTOMER_VISIBLE_STEPS,
@@ -83,9 +82,7 @@ export function CustomerPickup() {
           return
         }
       }
-      await patchCustomerCollectionConfirmationFromPickup(token, cred, {
-        timeNote: arrivalNote,
-      })
+      await patchCustomerCollectionConfirmationFromPickup(token, cred)
       addNotification('Thank you — your dealer has your confirmation.', 'success')
       await fetchVehicleAndStatus()
     } catch (err) {
@@ -128,11 +125,6 @@ export function CustomerPickup() {
         if (!byStep[u.step_key]) byStep[u.step_key] = u
       })
       setWorkflow(byStep)
-      setArrivalNote(
-        typeof vehicleData.customer_collection_time_note === 'string'
-          ? vehicleData.customer_collection_time_note.trim()
-          : ''
-      )
     } catch {
       setNotFound(true)
     } finally {
@@ -271,7 +263,7 @@ export function CustomerPickup() {
               <div className="min-w-0 flex-1 space-y-2">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-400/95">
-                    Confirm you can make this date (optional arrival time)
+                    Confirm you can make this date
                   </p>
                   <p className="text-[13px] text-zinc-400 mt-2 leading-relaxed">
                     Let us know you&apos;re aiming to collect on{' '}
@@ -298,20 +290,6 @@ export function CustomerPickup() {
                   ) : null}
                 </div>
                 <form onSubmit={handleConfirmCollection} className="space-y-2 pt-1">
-                  <label className="block text-[11px] text-zinc-500 uppercase tracking-wider" htmlFor="pickup-arrival-note">
-                    Rough arrival time{' '}
-                    <span className="text-zinc-600 font-normal lowercase normal-case">(optional)</span>
-                  </label>
-                  <input
-                    id="pickup-arrival-note"
-                    type="text"
-                    maxLength={CUSTOMER_COLLECTION_NOTE_MAX}
-                    value={arrivalNote}
-                    onChange={(e) => setArrivalNote(e.target.value)}
-                    placeholder='e.g. "around 11am"'
-                    autoComplete="off"
-                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-sm placeholder-zinc-600 focus:ring-2 focus:ring-emerald-500/40"
-                  />
                   <button
                     type="submit"
                     disabled={confirmBusy}

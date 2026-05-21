@@ -66,11 +66,6 @@ export const DETAIL_SECTIONS = [
         format: (v) => (v ? new Date(v).toLocaleString() : 'Not yet'),
       },
       {
-        key: 'customer_collection_time_note',
-        label: 'Customer rough arrival note',
-        format: (v) => (v && String(v).trim() ? String(v).trim() : 'None'),
-      },
-      {
         key: 'pickup_important_notice',
         label: 'Pickup page notice',
         format: (v) => (v && String(v).trim() ? String(v).trim() : 'None'),
