@@ -18,6 +18,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   Car,
   CalendarClock,
@@ -65,6 +66,7 @@ export function PublicFind() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [searchLoadMessage, setSearchLoadMessage] = useState('Loading stock…')
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
 
   const [cameraOpen, setCameraOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
@@ -192,6 +194,18 @@ export function PublicFind() {
   const hasActiveFilters =
     stockId.trim() || vin.trim() || plate.trim() || keyword.trim() || brandFilter || modelFilter
 
+  const advancedFiltersActive =
+    Boolean(stockId.trim() || vin.trim() || plate.trim() || brandFilter || modelFilter)
+
+  const clearAdvancedFilters = () => {
+    setStockId('')
+    setVin('')
+    setPlate('')
+    setBrandFilter('')
+    setModelFilter('')
+    setPage(1)
+  }
+
   const cardLink = (id) =>
     canStaffInventory ? `/vehicle/${id}` : `/find/vehicle/${id}`
 
@@ -298,11 +312,11 @@ export function PublicFind() {
             Find your next vehicle
           </p>
           <p className="text-zinc-400 text-sm max-w-2xl mb-6">
-            Filter by stock number, VIN, or registration plate. Optional keyword still matches make, model,
-            or location.
+            Search keywords for make, model, or location below. Scan a plate anytime. Extra filters refine by stock ID,
+            VIN, plate, make, or model — open filtering options when needed.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="relative flex-1">
               <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-500/80" />
               <input
@@ -324,67 +338,118 @@ export function PublicFind() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5">Stock ID</label>
-              <input
-                value={stockId}
-                onChange={(e) => setStockId(e.target.value)}
-                placeholder="e.g. AGL…"
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5">VIN</label>
-              <input
-                value={vin}
-                onChange={(e) => setVin(e.target.value)}
-                placeholder="Chassis number"
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 font-mono text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5">Number plate</label>
-              <input
-                value={plate}
-                onChange={(e) => setPlate(e.target.value.toUpperCase())}
-                placeholder="Registration"
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 uppercase"
-              />
-            </div>
-          </div>
+          <div className="rounded-xl border border-zinc-700/70 bg-zinc-950/50 overflow-hidden mb-4">
+            <button
+              type="button"
+              id="advanced-filters-toggle"
+              aria-expanded={advancedFiltersOpen}
+              aria-controls="advanced-filters-panel"
+              onClick={() => setAdvancedFiltersOpen((o) => !o)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition"
+            >
+              <span className="text-sm font-medium text-zinc-200">
+                Filtering options{' '}
+                <span className="text-zinc-500 font-normal">(stock, VIN, plate, make, model)</span>
+              </span>
+              <span className="flex items-center gap-2 shrink-0">
+                {advancedFiltersActive ? (
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-400/95 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/35">
+                    Active
+                  </span>
+                ) : null}
+                <ChevronDown
+                  className={`w-5 h-5 text-zinc-400 transition-transform duration-200 ${
+                    advancedFiltersOpen ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden
+                />
+              </span>
+            </button>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5">Make</label>
-              <select
-                value={brandFilter}
-                onChange={(e) => setBrandFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40"
-              >
-                <option value="">All makes</option>
-                {brands.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1.5">Model</label>
-              <select
-                value={modelFilter}
-                onChange={(e) => setModelFilter(e.target.value)}
-                disabled={!brandFilter}
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
-              >
-                <option value="">All models</option>
-                {models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+            <div
+              id="advanced-filters-panel"
+              role="region"
+              aria-labelledby="advanced-filters-toggle"
+              hidden={!advancedFiltersOpen}
+              className={advancedFiltersOpen ? 'border-t border-zinc-800/70' : undefined}
+            >
+              {advancedFiltersOpen ? (
+                <div className="px-4 pb-4 pt-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1.5">Stock ID</label>
+                      <input
+                        value={stockId}
+                        onChange={(e) => setStockId(e.target.value)}
+                        placeholder="e.g. AGL…"
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1.5">VIN</label>
+                      <input
+                        value={vin}
+                        onChange={(e) => setVin(e.target.value)}
+                        placeholder="Chassis number"
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1.5">Number plate</label>
+                      <input
+                        value={plate}
+                        onChange={(e) => setPlate(e.target.value.toUpperCase())}
+                        placeholder="Registration"
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1.5">Make</label>
+                      <select
+                        value={brandFilter}
+                        onChange={(e) => setBrandFilter(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40"
+                      >
+                        <option value="">All makes</option>
+                        {brands.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1.5">Model</label>
+                      <select
+                        value={modelFilter}
+                        onChange={(e) => setModelFilter(e.target.value)}
+                        disabled={!brandFilter}
+                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                      >
+                        <option value="">All models</option>
+                        {models.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {advancedFiltersActive && (
+                    <button
+                      type="button"
+                      onClick={clearAdvancedFilters}
+                      className="text-sm text-amber-400/90 hover:text-amber-300"
+                    >
+                      Clear filtering options
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -392,9 +457,9 @@ export function PublicFind() {
             <button
               type="button"
               onClick={clearFilters}
-              className="text-sm text-amber-400/90 hover:text-amber-300"
+              className="mt-3 text-sm text-zinc-500 hover:text-zinc-400 underline-offset-2 hover:underline"
             >
-              Clear all filters
+              Clear all search &amp; filtering options
             </button>
           )}
         </div>
