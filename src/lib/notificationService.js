@@ -8,6 +8,7 @@ import {
   fetchVehiclesForViewingStaffAlerts,
   fetchProfileWithPermissions,
   fetchPendingStaffJoinRequests,
+  fetchWorkshopServicesAroundToday,
   collectMyWorkItems,
   normalizeVehicleWorkflowInstances,
   workflowInstanceStepKey,
@@ -371,6 +372,60 @@ function userIsManagerTier(permissions) {
   return p.includes('users:manage') || p.includes('inventory:delete')
 }
 
+function buildWorkshopServiceTodayNotifications(firebaseUid, profile, permissionCodes, services) {
+  if (!firebaseUid) return []
+
+  const todayLocal = localYmd()
+  const codes = permissionCodes || []
+  const roleLc = String(profile?.role?.name || '').toLowerCase()
+  const isMgr =
+    userIsManagerTier(codes) || roleLc === 'super_admin' || roleLc === 'super admin'
+
+  /** @type {Array<Record<string, unknown>>} */
+  const items = []
+
+  for (const svc of services || []) {
+    if (!svc?.scheduled_at || svc.status !== 'scheduled') continue
+    const svcDay = coerceToLocalYmd(svc.scheduled_at)
+    if (svcDay !== todayLocal) continue
+
+    const mechanic = String(svc.mechanic_firebase_uid || '').trim()
+    const sales = String(svc.sales_firebase_uid || '').trim()
+    const isMechanic = mechanic && firebaseUid === mechanic
+    const isSales = sales && firebaseUid === sales
+    const show = isMechanic || isSales || isMgr
+    if (!show) continue
+
+    const timeBit = localeTimeHm(svc.scheduled_at)
+    const who = svc.customer_name || 'Customer'
+    const veh = `${svc.vehicle_make || ''} ${svc.vehicle_model || ''}`.trim()
+    const plateBit = svc.plate ? ` · ${svc.plate}` : ''
+    const loc = svc.location ? ` · ${svc.location}` : ''
+    const asahi = svc.is_asahi_customer ? 'Asahi inventory' : 'Walk-in / external'
+
+    const roleHints = []
+    if (isMechanic) roleHints.push('You are assigned mechanic')
+    if (isSales) roleHints.push('You are assigned sales')
+
+    items.push({
+      id: `workshop-today-${svc.id}-${todayLocal}`,
+      type: 'workshop_service_today',
+      title: 'Workshop service today',
+      message:
+        `${timeBit}: ${who} — ${veh || 'Vehicle TBC'}${plateBit}${loc}. (${asahi})` +
+          (roleHints.length ? `. ${roleHints.join('; ')}` : ''),
+      dueDate: svcDay,
+      sortAt: svc.scheduled_at || `${svcDay}T12:00:00`,
+      severity: 'high',
+      relevantTaskDone: false,
+      navigateTo: '/app/services',
+      workshopServiceId: svc.id,
+    })
+  }
+
+  return items
+}
+
 /** Same cohort as Users page — pending Google staff alerts go to role admins / user managers. */
 function canManageUsersForStaffAlerts(profile) {
   if (!profile) return false
@@ -516,11 +571,12 @@ export function enrichNotificationsWithRelevantTaskDone(items, vehiclesApp, fire
 
 /** Operational (delivery, MOT, PDI) + prep-path assignments and new discussion lines. */
 export async function fetchUnifiedAppNotifications(firebaseUid) {
-  const [profile, ops, vehicles, viewingPingVehicles] = await Promise.all([
+  const [profile, ops, vehicles, viewingPingVehicles, workshopRows] = await Promise.all([
     fetchProfileWithPermissions(firebaseUid),
     fetchAppNotifications(),
     fetchVehiclesWithWorkflows(),
     fetchVehiclesForViewingStaffAlerts(),
+    fetchWorkshopServicesAroundToday(),
   ])
   const permissions = profile?.permissions || []
   const isManager = userIsManagerTier(permissions)
@@ -540,11 +596,18 @@ export async function fetchUnifiedAppNotifications(firebaseUid) {
       navigateTo: '/app/users',
     }))
   }
+  const workshopTodayAlerts = buildWorkshopServiceTodayNotifications(
+    firebaseUid,
+    profile,
+    permissions,
+    workshopRows || [],
+  )
+
   const merged = [
     ...staffSignupAlerts,
     ...ops.map((n) => ({ ...n, sortAt: n.sortAt || n.dueDate || '' })),
     ...work,
-    ...viewingPings,
+    ...workshopTodayAlerts,
   ]
   merged.sort((a, b) => String(b.sortAt || '').localeCompare(String(a.sortAt || '')))
   return enrichNotificationsWithRelevantTaskDone(merged, vehicles || [], firebaseUid)

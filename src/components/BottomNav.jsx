@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutGrid, Car, PlusCircle, MoreHorizontal, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, CalendarRange, ContactRound } from 'lucide-react'
+import { LayoutGrid, Car, PlusCircle, MoreHorizontal, Settings, Activity, HardDrive, Shield, Users as UsersIcon, Bell, Route, ClipboardList, BarChart3, CalendarClock, CalendarRange, ContactRound, Wrench } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const moreMenuItems = [
   { to: '/pullouts', icon: CalendarRange, label: 'Pullouts', permission: 'inventory:view' },
+  { to: '/app/services', icon: Wrench, label: 'Services', permission: 'inventory:view' },
   { to: '/app/customers', icon: ContactRound, label: 'Customers', permission: 'inventory:view' },
   { to: '/app/viewings', icon: CalendarClock, label: 'Viewings', permission: 'inventory:view' },
   { to: '/app/notifications', icon: Bell, label: 'Notifications', permission: 'inventory:view' },

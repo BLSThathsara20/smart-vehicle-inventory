@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchVehiclesPublicPullouts } from '../lib/sanityData'
 import {
   buildPublicPulloutsSchedulePdf,
-  summarizePulloutPrepPublic,
+  getPulloutPrepInstanceBlocks,
 } from '../lib/publicPulloutsPdf'
 import { useAuth } from '../context/AuthContext'
 import { Footer } from '../components/Footer'
@@ -28,6 +28,49 @@ function fmtCollectionDate(raw) {
   } catch {
     return String(raw)
   }
+}
+
+function PulloutPrepWorkColumn({ vehicle }) {
+  const blocks = getPulloutPrepInstanceBlocks(vehicle)
+  if (!blocks.length) {
+    return <span className="text-zinc-500 text-[13px]">No prep paths</span>
+  }
+  return (
+    <div className="space-y-3 py-1 min-w-[280px] max-w-xl">
+      {blocks.map((blk) => (
+        <div key={blk.id} className="rounded-lg border border-zinc-700/80 bg-zinc-950/55 overflow-hidden">
+          <div className="px-2.5 py-2 border-b border-zinc-800/70 bg-zinc-900/40">
+            <p className="text-[12px] font-semibold text-amber-400/95 leading-tight">{blk.title}</p>
+            <p className="text-[10px] text-zinc-500 mt-1 leading-snug">{blk.subtitle}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[10px] text-zinc-300 min-w-[260px]">
+              <thead>
+                <tr className="text-zinc-500 bg-zinc-900/25 uppercase tracking-wide text-[9px]">
+                  <th className="px-2 py-1.5 font-semibold w-11">✓</th>
+                  <th className="px-2 py-1.5 font-semibold">Step</th>
+                  <th className="px-2 py-1.5 font-semibold w-[26%]">Assigned</th>
+                  <th className="px-2 py-1.5 font-semibold">Task / checklist item</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blk.rows.map((r, idx) => (
+                  <tr key={`${blk.id}-${idx}`} className="border-t border-zinc-800/50 align-top">
+                    <td className="px-2 py-1.5 font-mono text-emerald-400/90 whitespace-nowrap tabular-nums">
+                      {r.mark}
+                    </td>
+                    <td className="px-2 py-1.5 text-zinc-400 leading-snug">{r.stepLine || '—'}</td>
+                    <td className="px-2 py-1.5 text-zinc-500 leading-snug break-words">{r.assignee}</td>
+                    <td className="px-2 py-1.5 text-zinc-200 leading-snug break-words">{r.task}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function PublicPullouts() {
@@ -117,10 +160,9 @@ export function PublicPullouts() {
             Public viewer
           </span>
           <p className="mt-2">
-            Vehicles listed here are reserved (not sold). Those with a planned collection date are sorted first;
-            others stay visible until you add a date on the vehicle or reservation workflow. Preparation work paths show
-            progress only (titles and statuses). Pricing, customer contacts, and other private reservation
-            fields are not shown.
+            Preparation work paths list each assigned path, step titles, owners, and every checklist row with{' '}
+            <span className="font-mono text-emerald-400/95">[x]</span> / <span className="font-mono text-zinc-500">[ ]</span>{' '}
+            marks. Pricing, customer contacts, and other private reservation fields are not shown.
           </p>
         </div>
 
@@ -143,7 +185,7 @@ export function PublicPullouts() {
         {!loading && rows.length > 0 && (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm min-w-[720px]">
+              <table className="w-full text-left text-sm min-w-[960px]">
                 <thead>
                   <tr className="border-b border-zinc-800 bg-zinc-900/90 text-zinc-400 uppercase text-[11px] tracking-wide">
                     <th className="py-3 px-3 font-semibold">Stock</th>
@@ -151,7 +193,7 @@ export function PublicPullouts() {
                     <th className="py-3 px-3 font-semibold">Plate</th>
                     <th className="py-3 px-3 font-semibold">Collection</th>
                     <th className="py-3 px-3 font-semibold">Ready</th>
-                    <th className="py-3 px-3 font-semibold">Prep work</th>
+                    <th className="py-3 px-3 font-semibold min-w-[300px]">Prep work</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -178,8 +220,8 @@ export function PublicPullouts() {
                       <td className="py-3 px-3 text-zinc-400">
                         {v.ready_pullout === true ? 'Yes' : 'No'}
                       </td>
-                      <td className="py-3 px-3 text-zinc-400 text-[13px] leading-snug max-w-[320px]">
-                        {summarizePulloutPrepPublic(v)}
+                      <td className="py-3 px-3 align-top">
+                        <PulloutPrepWorkColumn vehicle={v} />
                       </td>
                     </tr>
                   ))}

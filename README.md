@@ -9,6 +9,7 @@ A mobile-first vehicle inventory app: **React**, **Firebase Auth**, **Sanity** (
 - **Sanity** – vehicles, roles, permissions, user profiles, workflow updates (first load seeds roles/permissions)
 - **ImgBB** – vehicle photos stored as URLs on each vehicle document
 - Search, filters, notifications, export (PDF/Excel), mobile-first UI
+- **Workshop services** — `/app/services` schedules jobs for inventory or external customers, optional mechanic and sales assignments, overlap-aware calendar-day popover, and “service today” rows in **Notifications** for assignees plus manager-tier roles (`super_admin` or permissions `inventory:delete` / `users:manage`). Editing uses the same **inventory:edit** permission as vehicle/viewing workflows.
 - **Public scheduled collections** — `/pullouts` lists reserved vehicles (not sold); those with a planned collection date sort first, others still appear until a date is set (no customer PII); read-only for everyone including guests, with PDF export. Signed-in staff also reach this from the sidebar **Pullouts** link (same URL).
 
 ## Setup
@@ -50,6 +51,28 @@ Add this document type in Studio if you want editable titles/help text (optional
 | `requested_at` | datetime | First request time |
 
 Stable `_id`: `staffJoinRequest.{sanitizedUid}` (derived from Firebase UID).
+
+### Sanity `workshopService` (sidebar **Services**)
+
+Add this document type in Studio so you can sanity-check fields locally (optional — the API can create/write without Studio):
+
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `is_asahi_customer` | boolean | When true, require `inventory_vehicle` reference |
+| `inventory_vehicle` | reference → `vehicle` | Optional when walk-in external |
+| `customer_name`, `customer_phone`, `customer_email` | strings | Booking contact |
+| `vehicle_make`, `vehicle_model`, `plate` | strings | Capture details; populated from inventory when a vehicle is selected |
+| `scheduled_at` | datetime | Booking start |
+| `duration_minutes` | number | Defaults to 60; used for overlap detection |
+| `location` | string | Where the job happens |
+| `mechanic_firebase_uid`, `sales_firebase_uid` | strings | Firebase Auth UID of assignees (notifications when today) |
+| `notes` | text | Instructions / comments |
+| `status` | string | `scheduled`, `completed`, or `cancelled` |
+| `completed_at` | datetime | Set when marked **Done** (status `completed`) |
+| `cancelled_at` | datetime | Set when cancelled |
+| `created_by_firebase_uid`, `created_by_name`, `created_at`, `updated_at` | audit | Set by app |
+
+Stable `_id` pattern from the client: `workshopService.{uuid}`.
 
 
 

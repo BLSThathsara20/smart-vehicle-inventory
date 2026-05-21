@@ -2942,3 +2942,313 @@ export async function fetchVehicleIdsHavingReservationSteps(stepKeys, vehicleIds
 export async function fetchPdiApprovedVehicleIds(reservedIds) {
 	return fetchVehicleIdsHavingReservationSteps(["pdi_approved"], reservedIds);
 }
+
+// --- Workshop / service bookings (separate line of business — not tied to inventory status) ---
+/**
+ * Sanity document type suggested in README: workshopService (add in Studio).
+ * App writes tolerate missing Studio schema via API.
+ */
+export function workshopServiceDocumentId() {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return `workshopService.${crypto.randomUUID()}`;
+	}
+	return `workshopService.${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function normalizeWorkshopService(doc) {
+	if (!doc?._id) return null;
+	const ref =
+		doc.inventory_vehicle?._ref ||
+		doc.inventory_vehicle?._id ||
+		(doc.inventory_vehicle && String(doc.inventory_vehicle)) ||
+		"";
+	const dm = Number(doc.duration_minutes);
+	return {
+		id: doc._id,
+		is_asahi_customer: doc.is_asahi_customer === true,
+		inventory_vehicle_id: ref || null,
+		customer_name: String(doc.customer_name || "").trim(),
+		customer_phone: String(doc.customer_phone || "").trim(),
+		customer_email: String(doc.customer_email || "").trim(),
+		vehicle_make: String(doc.vehicle_make || "").trim(),
+		vehicle_model: String(doc.vehicle_model || "").trim(),
+		plate: String(doc.plate || "").trim(),
+		scheduled_at: doc.scheduled_at || "",
+		duration_minutes: Number.isFinite(dm) && dm > 0 ? dm : 60,
+		location: String(doc.location || "").trim(),
+		mechanic_firebase_uid: String(doc.mechanic_firebase_uid || ""),
+		sales_firebase_uid: String(doc.sales_firebase_uid || ""),
+		notes: String(doc.notes || "").trim(),
+		status: ["scheduled", "completed", "cancelled"].includes(doc.status)
+			? doc.status
+			: "scheduled",
+		completed_at: doc.completed_at || "",
+		cancelled_at: doc.cancelled_at || "",
+		created_by_firebase_uid: String(doc.created_by_firebase_uid || ""),
+		created_by_name: String(doc.created_by_name || "").trim(),
+		created_at: doc.created_at || "",
+		updated_at: doc.updated_at || "",
+	};
+}
+
+export async function fetchWorkshopServicesBetween(fromIso, toIso) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const from =
+		fromIso instanceof Date ? fromIso.toISOString() : String(fromIso || "");
+	const to = toIso instanceof Date ? toIso.toISOString() : String(toIso || "");
+	if (!from || !to) return [];
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService" && scheduled_at >= $from && scheduled_at <= $to] | order(scheduled_at asc){
+      ...,
+      inventory_vehicle->{ _id }
+    }`,
+		{ from, to },
+	);
+	return (docs || []).map(normalizeWorkshopService).filter(Boolean);
+}
+
+/** Scheduled-only, date range — calendar + active upcoming window */
+export async function fetchWorkshopServicesScheduledBetween(fromIso, toIso) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const from =
+		fromIso instanceof Date ? fromIso.toISOString() : String(fromIso || "");
+	const to = toIso instanceof Date ? toIso.toISOString() : String(toIso || "");
+	if (!from || !to) return [];
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService" && status == "scheduled" && scheduled_at >= $from && scheduled_at <= $to] | order(scheduled_at asc){
+      ...,
+      inventory_vehicle->{ _id }
+    }`,
+		{ from, to },
+	);
+	return (docs || []).map(normalizeWorkshopService).filter(Boolean);
+}
+
+const WS_PAGE_MAX = 50;
+
+export async function countWorkshopServicesScheduled() {
+	if (!sanity) return 0;
+	await ensureBootstrap();
+	const n = await sanity.fetch(
+		'count(*[_type == "workshopService" && status == "scheduled"])',
+	);
+	return typeof n === "number" ? n : 0;
+}
+
+export async function fetchWorkshopServicesScheduledPage(page, pageSize) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const ps = Math.min(
+		Math.max(Number(pageSize) || 12, 1),
+		WS_PAGE_MAX,
+	);
+	const p = Math.max(Number(page) || 1, 1);
+	const start = (p - 1) * ps;
+	const end = start + ps;
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService" && status == "scheduled"] | order(scheduled_at asc) [$start...$end]{
+      ...,
+      inventory_vehicle->{ _id }
+    }`,
+		{ start, end },
+	);
+	return (docs || []).map(normalizeWorkshopService).filter(Boolean);
+}
+
+export async function countWorkshopServicesPast() {
+	if (!sanity) return 0;
+	await ensureBootstrap();
+	const n = await sanity.fetch(
+		'count(*[_type == "workshopService" && status in ["completed","cancelled"]])',
+	);
+	return typeof n === "number" ? n : 0;
+}
+
+export async function fetchWorkshopServicesPastPage(page, pageSize) {
+	if (!sanity) return [];
+	await ensureBootstrap();
+	const ps = Math.min(
+		Math.max(Number(pageSize) || 15, 1),
+		WS_PAGE_MAX,
+	);
+	const p = Math.max(Number(page) || 1, 1);
+	const start = (p - 1) * ps;
+	const end = start + ps;
+	const docs = await sanity.fetch(
+		`*[_type == "workshopService" && status in ["completed","cancelled"]] | order(coalesce(completed_at, cancelled_at, updated_at) desc) [$start...$end]{
+      ...,
+      inventory_vehicle->{ _id }
+    }`,
+		{ start, end },
+	);
+	return (docs || []).map(normalizeWorkshopService).filter(Boolean);
+}
+
+/** Notification feed — scheduled jobs only in a local window around “today” */
+export async function fetchWorkshopServicesAroundToday() {
+	const from = new Date();
+	from.setHours(0, 0, 0, 0);
+	from.setDate(from.getDate() - 3);
+	const to = new Date();
+	to.setHours(23, 59, 59, 999);
+	to.setDate(to.getDate() + 14);
+	return fetchWorkshopServicesScheduledBetween(
+		from.toISOString(),
+		to.toISOString(),
+	);
+}
+
+function workshopServiceMutationDoc(input, extras = {}) {
+	const now = new Date().toISOString();
+	const dm = Number(input.duration_minutes);
+	const dur =
+		Number.isFinite(dm) && dm > 5 && dm <= 24 * 60 ? Math.floor(dm) : 60;
+	const inv = input.inventory_vehicle_id
+		? { _type: "reference", _ref: input.inventory_vehicle_id }
+		: undefined;
+	const core = {
+		_type: "workshopService",
+		is_asahi_customer: !!input.is_asahi_customer,
+		customer_name: String(input.customer_name || "").trim(),
+		customer_phone: String(input.customer_phone || "").trim(),
+		customer_email: String(input.customer_email || "").trim(),
+		vehicle_make: String(input.vehicle_make || "").trim(),
+		vehicle_model: String(input.vehicle_model || "").trim(),
+		plate: String(input.plate || "").trim(),
+		scheduled_at: input.scheduled_at,
+		duration_minutes: dur,
+		location: String(input.location || "").trim(),
+		mechanic_firebase_uid: String(input.mechanic_firebase_uid || ""),
+		sales_firebase_uid: String(input.sales_firebase_uid || ""),
+		notes: String(input.notes || "").trim(),
+		status:
+			input.status === "completed" || input.status === "cancelled"
+				? input.status
+				: "scheduled",
+		updated_at: now,
+	};
+	if (inv) core.inventory_vehicle = inv;
+	Object.assign(core, extras);
+	return core;
+}
+
+export async function createWorkshopService(payload) {
+	if (!sanity) throw new Error("Sanity not configured");
+	await ensureBootstrap();
+	const now = new Date().toISOString();
+	const created = workshopServiceMutationDoc(payload, {
+		...(payload.created_by_firebase_uid
+			? { created_by_firebase_uid: payload.created_by_firebase_uid }
+			: {}),
+		...(payload.created_by_name
+			? { created_by_name: payload.created_by_name }
+			: {}),
+		created_at: now,
+	});
+	if (!created.scheduled_at) throw new Error("Date and time are required.");
+	if (
+		payload.is_asahi_customer &&
+		!String(payload.inventory_vehicle_id || "").trim()
+	) {
+		throw new Error("Select an inventory vehicle for Asahi customers.");
+	}
+	if (!payload.is_asahi_customer) {
+		if (
+			!String(payload.vehicle_make || "").trim() ||
+			!String(payload.vehicle_model || "").trim()
+		) {
+			throw new Error("Vehicle make and model are required for walk-in guests.");
+		}
+	}
+	if (!created.customer_name) throw new Error("Customer name is required.");
+	const doc = {
+		...created,
+		_id: workshopServiceDocumentId(),
+	};
+	if (!doc.inventory_vehicle) delete doc.inventory_vehicle;
+	await sanity.create(doc);
+	return doc._id;
+}
+
+export async function updateWorkshopService(id, patchInput) {
+	if (!sanity) throw new Error("Sanity not configured");
+	if (!id) throw new Error("Missing document id.");
+	const now = new Date().toISOString();
+	const dm = Number(patchInput.duration_minutes);
+	const dur =
+		Number.isFinite(dm) && dm > 5 && dm <= 24 * 60 ? Math.floor(dm) : undefined;
+	const setFields = {
+		updated_at: now,
+		...(patchInput.is_asahi_customer !== undefined
+			? { is_asahi_customer: !!patchInput.is_asahi_customer }
+			: {}),
+		...(patchInput.customer_name !== undefined
+			? { customer_name: String(patchInput.customer_name || "").trim() }
+			: {}),
+		...(patchInput.customer_phone !== undefined
+			? { customer_phone: String(patchInput.customer_phone || "").trim() }
+			: {}),
+		...(patchInput.customer_email !== undefined
+			? { customer_email: String(patchInput.customer_email || "").trim() }
+			: {}),
+		...(patchInput.vehicle_make !== undefined
+			? { vehicle_make: String(patchInput.vehicle_make || "").trim() }
+			: {}),
+		...(patchInput.vehicle_model !== undefined
+			? { vehicle_model: String(patchInput.vehicle_model || "").trim() }
+			: {}),
+		...(patchInput.plate !== undefined
+			? { plate: String(patchInput.plate || "").trim() }
+			: {}),
+		...(patchInput.scheduled_at !== undefined
+			? { scheduled_at: patchInput.scheduled_at }
+			: {}),
+		...(dur !== undefined ? { duration_minutes: dur } : {}),
+		...(patchInput.location !== undefined
+			? { location: String(patchInput.location || "").trim() }
+			: {}),
+		...(patchInput.mechanic_firebase_uid !== undefined
+			? { mechanic_firebase_uid: String(patchInput.mechanic_firebase_uid || "") }
+			: {}),
+		...(patchInput.sales_firebase_uid !== undefined
+			? { sales_firebase_uid: String(patchInput.sales_firebase_uid || "") }
+			: {}),
+		...(patchInput.notes !== undefined
+			? { notes: String(patchInput.notes || "").trim() }
+			: {}),
+	};
+	const statusNext =
+		patchInput.status !== undefined
+			? ["scheduled", "completed", "cancelled"].includes(patchInput.status)
+				? patchInput.status
+				: "scheduled"
+			: undefined;
+	if (statusNext !== undefined) {
+		setFields.status = statusNext;
+	}
+	if (statusNext === "completed") {
+		setFields.completed_at = patchInput.completed_at || now;
+	}
+	if (statusNext === "cancelled") {
+		setFields.cancelled_at = patchInput.cancelled_at || now;
+	}
+	if (
+		Object.prototype.hasOwnProperty.call(patchInput, "inventory_vehicle_id")
+	) {
+		const ref = String(patchInput.inventory_vehicle_id || "").trim();
+		if (ref) {
+			setFields.inventory_vehicle = { _type: "reference", _ref: ref };
+		}
+	}
+	let patchChain = sanity.patch(id).set(setFields);
+	if (
+		Object.prototype.hasOwnProperty.call(patchInput, "inventory_vehicle_id") &&
+		!String(patchInput.inventory_vehicle_id || "").trim()
+	) {
+		patchChain = patchChain.unset(["inventory_vehicle"]);
+	}
+
+	await patchChain.commit();
+}

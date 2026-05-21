@@ -103,18 +103,110 @@ function formatSubtaskPdfDescription(t) {
   return body || '—'
 }
 
+/** Work path snapshots with flattened subtasks ([x]/[ ] per row); pullouts UI + PDF summary.
+ * Steps without checklist items still get a completion row keyed off `completed_steps` for that step_key.
+ */
+export function getPulloutPrepInstanceBlocks(vehicle) {
+  const instances = normalizeVehicleWorkflowInstances(vehicle)
+  if (!instances.length) return []
+
+  return instances.map((inst, ii) => {
+    const steps = inst.steps || []
+    const dk = completedKeysSet(inst)
+    const title = safe(inst.template_name) !== '—' ? inst.template_name : 'Prep path'
+    const subtitleParts = [safe(inst.status)]
+    if (inst.deadline_at) subtitleParts.push(`Deadline ${fmtDate(inst.deadline_at)}`)
+    const subtitle = subtitleParts.join(' · ')
+    const idRaw = inst.instance_id || inst.template_id || `prep-${ii}`
+
+    const rows = []
+
+    steps.forEach((step, si) => {
+      const assignee = safe(step.assignee_name || step.assignee_uid)
+      const stepLine = `${si + 1}. ${safe(step.title)}`
+      const stepKey = workflowInstanceStepKey(steps, si)
+      const stepCompleted = dk.has(stepKey)
+
+      const subs = Array.isArray(step.subtasks) ? step.subtasks : []
+      if (subs.length === 0) {
+        rows.push({
+          mark: subtaskDoneMark(stepCompleted),
+          stepLine,
+          assignee,
+          task: stepCompleted ? 'Step completed (no checklist items)' : 'No checklist items',
+        })
+        return
+      }
+      subs.forEach((t, ti) => {
+        rows.push({
+          mark: subtaskDoneMark(!!t.done),
+          stepLine: ti === 0 ? stepLine : '',
+          assignee,
+          task: formatSubtaskPdfDescription(t),
+        })
+      })
+    })
+
+    if (rows.length === 0 && steps.length === 0) {
+      rows.push({ mark: '—', stepLine: '(no steps)', assignee: '—', task: '—' })
+    }
+
+    return {
+      id: safe(idRaw),
+      title,
+      subtitle,
+      rows,
+    }
+  })
+}
+
+/** Multi-line prep column for PDF cover summary table. */
+export function formatPulloutPrepSummaryForPdfCell(vehicle) {
+  const blocks = getPulloutPrepInstanceBlocks(vehicle)
+  if (!blocks.length) return 'No prep paths'
+
+  const lines = []
+  for (const b of blocks) {
+    lines.push(`${b.title} — ${b.subtitle}`)
+    for (const r of b.rows) {
+      const stepBit = r.stepLine ? `${r.stepLine}: ` : '         '
+      const taskShort = truncateMiddle(String(r.task), 95)
+      lines.push(` ${r.mark} ${stepBit}${safe(r.assignee)} — ${taskShort}`)
+    }
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
 /**
+ * Per-vehicle appendix: checklist rows incl. bare steps ([x]/[ ] from workflow completed_steps).
  * @param {object} doc jsPDF instance
  * @param {number} margin
  * @param {number} startY
+ * @param {unknown[]} steps
+ * @param {{ completed_steps?: unknown[] }} [inst]
  * @returns {number} next Y after table(s)
  */
-function appendWorkPathSubtasksTable(doc, margin, startY, steps) {
+function appendWorkPathSubtasksTable(doc, margin, startY, steps, inst) {
   const body = []
+  const dk = inst ? completedKeysSet(inst) : new Set()
+
   ;(steps || []).forEach((step, si) => {
     const subs = step.subtasks || []
-    if (!subs.length) return
     const assignee = safe(step.assignee_name || step.assignee_uid)
+    const sk = workflowInstanceStepKey(steps, si)
+    const stepDone = dk.has(sk)
+
+    if (!subs.length) {
+      body.push([
+        String(si + 1),
+        safe(step.title),
+        assignee,
+        subtaskDoneMark(stepDone),
+        stepDone ? 'Step completed (no checklist items)' : 'No checklist items',
+      ])
+      return
+    }
     subs.forEach((t) => {
       body.push([
         String(si + 1),
@@ -134,7 +226,7 @@ function appendWorkPathSubtasksTable(doc, margin, startY, steps) {
   }
   doc.setFont(undefined, 'bold')
   doc.setFontSize(9)
-  doc.text('Step checklists (all subtasks)', margin, y)
+  doc.text('Checklist & step completion ([x] / [ ])', margin, y)
   y += 4
   doc.setFont(undefined, 'italic')
   doc.setFontSize(7)
@@ -191,26 +283,31 @@ export function buildPublicPulloutsSchedulePdf(vehicles) {
     safe(v.plate_no),
     fmtDate(v.planned_collection_date),
     v.ready_pullout === true ? 'Yes' : 'No',
-    summarizePulloutPrepPublic(v),
+    formatPulloutPrepSummaryForPdfCell(v),
   ])
 
   autoTable(doc, {
     startY: y,
-    head: [['Stock', 'Vehicle', 'Plate', 'Collection date', 'Ready pulout', 'Prep paths (summary)']],
+    head: [['Stock', 'Vehicle', 'Plate', 'Collection', 'Ready', 'Prep paths & checklist']],
     body:
       summaryBody.length > 0
         ? summaryBody
         : [['—', 'No vehicles on pullout list', '—', '—', '—', '—']],
     margin: { left: margin, right: margin },
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: {
+      fontSize: 7,
+      cellPadding: 1.5,
+      overflow: 'linebreak',
+      valign: 'top',
+    },
     headStyles: { fillColor: [245, 158, 11], textColor: [24, 24, 27] },
     columnStyles: {
-      0: { cellWidth: 14 },
-      1: { cellWidth: 36 },
-      2: { cellWidth: 22 },
-      3: { cellWidth: 28 },
-      4: { cellWidth: 18 },
-      5: { cellWidth: 52 },
+      0: { cellWidth: 12 },
+      1: { cellWidth: 26 },
+      2: { cellWidth: 18 },
+      3: { cellWidth: 24 },
+      4: { cellWidth: 12 },
+      5: { cellWidth: 80 },
     },
   })
   y = doc.lastAutoTable.finalY + 12
@@ -319,7 +416,7 @@ export function buildPublicPulloutsSchedulePdf(vehicles) {
         },
       })
       y = doc.lastAutoTable.finalY + 10
-      y = appendWorkPathSubtasksTable(doc, margin, y, steps)
+      y = appendWorkPathSubtasksTable(doc, margin, y, steps, inst)
     })
   }
 

@@ -76,6 +76,7 @@ export function Notifications() {
     if (type === 'work_assigned') return ClipboardList
     if (type === 'work_comment') return MessageCircle
     if (type === 'staff_signup_pending') return UserPlus
+    if (type === 'workshop_service_today') return Wrench
     return Car
   }
 

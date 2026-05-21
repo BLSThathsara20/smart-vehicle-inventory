@@ -25,6 +25,7 @@ import { Viewings } from "./pages/Viewings";
 import { Customers } from "./pages/Customers";
 import { CollectionPuloutReport } from "./pages/CollectionPuloutReport";
 import { CustomerPickup } from "./pages/CustomerPickup";
+import { Services } from "./pages/Services";
 import { Privacy } from "./pages/Privacy";
 import { ResetPassword } from "./pages/ResetPassword";
 import { RequirePermission } from "./components/RequirePermission";
@@ -205,6 +206,14 @@ function AppRoutes() {
 					element={
 						<RequirePermission permission="inventory:view">
 							<Customers />
+						</RequirePermission>
+					}
+				/>
+				<Route
+					path="services"
+					element={
+						<RequirePermission permission="inventory:view">
+							<Services />
 						</RequirePermission>
 					}
 				/>
