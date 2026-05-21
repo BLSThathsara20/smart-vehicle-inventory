@@ -1,0 +1,14 @@
+---
+description: After finishing a coherent change for the user, commit and push unless they opt out.
+alwaysApply: true
+---
+
+# Commit and push after discrete work
+
+When you complete a clear unit of work the user asked for (bugfix, feature slice, copy, config):
+
+1. If you changed app code and have not already verified a successful build this session, run `npm run build`.
+2. Create a commit with a short message focused on *why* (follow repo conventions; never commit secrets such as `.env`).
+3. Push to `origin` on the current branch (usually `main`).
+
+Skip commit/push if the user explicitly said not to commit, there is nothing left to push, or the task was questions-only.
