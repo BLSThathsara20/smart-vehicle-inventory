@@ -35,9 +35,12 @@ export function formatTypingIntDigits(inputDisplay) {
 
 /**
  * Monetary / decimal typing with commas on the integer part.
- * Keeps one decimal separator and up to 2 fractional digits.
+ * Keeps one decimal separator and fractional digits up to maxFractionDigits.
  */
-export function formatTypingMoney(inputDisplay, { treatTrailingDot = false } = {}) {
+export function formatTypingMoney(
+	inputDisplay,
+	{ treatTrailingDot = false, maxFractionDigits = 2 } = {},
+) {
 	let s = String(inputDisplay ?? "");
 	const endsWithDot = /\.\s*$/.test(s);
 	let core = stripNumberGrouping(s).replace(/[^\d.]/g, "");
@@ -52,7 +55,7 @@ export function formatTypingMoney(inputDisplay, { treatTrailingDot = false } = {
 	const wholeFmt = wholeNum.toLocaleString("en-GB");
 	let out = "";
 	if (fracRaw != null && fracRaw.length > 0) {
-		const frac = fracRaw.replace(/\D/g, "").slice(0, 2);
+		const frac = fracRaw.replace(/\D/g, "").slice(0, maxFractionDigits);
 		out = `${wholeFmt}.${frac}`;
 	} else if (dotIdx !== -1 || (endsWithDot && treatTrailingDot)) out = `${wholeFmt}.`;
 	else if (core === "." || (wholeRaw === "" && dotIdx !== -1)) out = "";

@@ -94,7 +94,14 @@ const defaultForm = (vehicle) => {
   details: vehicle?.details ?? '',
   color: vehicle?.color ?? '',
   mileage: intToDisplayComma(vehicle?.mileage),
-  cc: intToDisplayComma(vehicle?.cc),
+  cc: (() => {
+    const raw = vehicle?.cc
+    if (raw == null || raw === '') return ''
+    const n = typeof raw === 'number' ? raw : parseCommaDecimal(String(raw))
+    return Number.isFinite(n)
+      ? n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
+      : ''
+  })(),
   model_year: vehicle?.model_year != null && vehicle?.model_year !== '' ? String(vehicle.model_year) : '',
   fuel_type: vehicle?.fuel_type ?? '',
   gear: vehicle?.gear ?? '',
@@ -352,7 +359,7 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
         details: form.details.trim() || null,
         color: form.color.trim() || null,
         mileage: parseCommaInt(form.mileage),
-        cc: parseCommaInt(form.cc),
+        cc: parseCommaDecimal(form.cc),
         model_year: form.model_year ? parseInt(form.model_year, 10) : null,
         fuel_type: form.fuel_type || null,
         gear: form.gear || null,
@@ -636,10 +643,15 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
           <VehicleField label="CC">
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={form.cc}
-              onChange={(e) => update('cc', formatTypingIntDigits(e.target.value))}
-              placeholder="e.g. 2,000"
+              onChange={(e) =>
+                update(
+                  'cc',
+                  formatTypingMoney(e.target.value, { treatTrailingDot: true, maxFractionDigits: 4 }),
+                )
+              }
+              placeholder="e.g. 2,000 or 1.2"
               className={inputClass}
             />
           </VehicleField>
