@@ -1502,6 +1502,179 @@ export function buildVehicleFilter(opts = {}) {
 	return { filter: clauses.join(" && "), params };
 }
 
+/** Strip glob metacharacters — user text is interpolated into Sanity `match` patterns. */
+function sanitizeOmnibarQuery(raw) {
+	return String(raw || "")
+		.replace(/\*/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+/**
+ * Lightweight multi-entity lookup for header search (inventory, CRM contacts on vehicles,
+ * workshop services, team profiles).
+ */
+export async function globalOmniSearch(rawQuery, options = {}) {
+	const empty = {
+		vehicles: [],
+		contactVehicles: [],
+		services: [],
+		team: [],
+	};
+	const q = sanitizeOmnibarQuery(rawQuery);
+	if (!sanity || q.length < 2) return empty;
+	await ensureBootstrap();
+
+	const vl = Math.min(Number(options.vehicleLimit) || 6, 12);
+	const cl = Math.min(Number(options.contactLimit) || 5, 12);
+	const sl = Math.min(Number(options.serviceLimit) || 5, 12);
+	const tl = Math.min(Number(options.teamLimit) || 5, 12);
+
+	const {
+		vehicles: wantVehicles = true,
+		contacts: wantContacts = true,
+		services: wantServices = true,
+		team: wantTeam = true,
+	} = options;
+
+	const pat = `*${q}*`;
+
+	const mapMiniVehicle = (doc) =>
+		doc?.id
+			? {
+					id: doc.id,
+					stock_id: doc.stock_id ?? "",
+					plate_no: doc.plate_no ?? "",
+					brand: doc.brand ?? "",
+					model: doc.model ?? "",
+					reserved: !!doc.reserved,
+					sold: !!doc.sold,
+				}
+			: null;
+
+	let vehiclePromise = Promise.resolve([]);
+	if (wantVehicles) {
+		const { filter, params } = buildVehicleFilter({ search: q });
+		vehiclePromise = sanity.fetch(
+			`*[${filter}] | order(_updatedAt desc) [0...${vl}] {
+        "id": _id,
+        stock_id,
+        plate_no,
+        brand,
+        model,
+        reserved,
+        sold
+      }`,
+			params,
+		);
+	}
+
+	let contactsPromise = Promise.resolve([]);
+	if (wantContacts) {
+		contactsPromise = sanity.fetch(
+			`*[_type == "vehicle" && (
+        (defined(customer_name) && customer_name match $pat) ||
+        (defined(customer_email) && customer_email match $pat) ||
+        (defined(customer_phone) && customer_phone match $pat) ||
+        (defined(buyers_name) && buyers_name match $pat)
+      )][0...${cl}]{
+        "id": _id,
+        stock_id,
+        plate_no,
+        brand,
+        model,
+        customer_name,
+        buyers_name,
+        customer_phone,
+        customer_email,
+        reserved,
+        sold
+      }`,
+			{ pat },
+		);
+	}
+
+	let servicesPromise = Promise.resolve([]);
+	if (wantServices) {
+		servicesPromise = sanity.fetch(
+			`*[_type == "workshopService" && (
+        (defined(customer_name) && customer_name match $pat) ||
+        (defined(customer_phone) && customer_phone match $pat) ||
+        (defined(customer_email) && customer_email match $pat) ||
+        (defined(plate) && plate match $pat) ||
+        (defined(vehicle_make) && vehicle_make match $pat) ||
+        (defined(vehicle_model) && vehicle_model match $pat) ||
+        (defined(notes) && notes match $pat) ||
+        (defined(location) && location match $pat)
+      )][0...${sl}]{
+        ...,
+        inventory_vehicle->{ _id }
+      }`,
+			{ pat },
+		);
+	}
+
+	let teamPromise = Promise.resolve([]);
+	if (wantTeam) {
+		teamPromise = sanity.fetch(
+			`*[_type == "userProfile" && (
+        (defined(display_name) && display_name match $pat) ||
+        (defined(email) && email match $pat)
+      )][0...${tl}]{
+        "id": _id,
+        firebase_uid,
+        email,
+        display_name,
+        "roleName": role->name
+      }`,
+			{ pat },
+		);
+	}
+
+	try {
+		const [vehicleDocs, contactRows, serviceDocs, teamRows] =
+			await Promise.all([
+				vehiclePromise,
+				contactsPromise,
+				servicesPromise,
+				teamPromise,
+			]);
+
+		const vehicles = (vehicleDocs || [])
+			.map(mapMiniVehicle)
+			.filter(Boolean);
+
+		const vehicleIds = new Set(vehicles.map((v) => v.id));
+		const contactVehicles = (contactRows || [])
+			.filter((row) => row.id && !vehicleIds.has(row.id))
+			.map((row) => ({
+				id: row.id,
+				stock_id: row.stock_id ?? "",
+				plate_no: row.plate_no ?? "",
+				brand: row.brand ?? "",
+				model: row.model ?? "",
+				label:
+					row.customer_name ||
+					row.buyers_name ||
+					row.customer_email ||
+					row.customer_phone ||
+					"Contact",
+				reserved: !!row.reserved,
+				sold: !!row.sold,
+			}));
+
+		const services = (serviceDocs || [])
+			.map(normalizeWorkshopService)
+			.filter(Boolean);
+
+		const team = teamRows || [];
+
+		return { vehicles, contactVehicles, services, team };
+	} catch {
+		return empty;
+	}
+}
+
 export async function fetchVehiclesForList(opts = {}) {
 	if (!sanity) return [];
 	const lim = Math.min(Number(opts.limit) || 500, 2000);
@@ -1590,7 +1763,17 @@ export async function fetchRecentSold(limit = 10) {
 	if (!sanity) return [];
 	const lim = Math.min(Math.max(1, Number(limit) || 10), 50);
 	const docs = await sanity.fetch(
-		`*[_type == "vehicle" && sold == true] | order(_createdAt desc) [0...${lim}] ${vehicleProjection}`,
+		`*[_type == "vehicle" && sold == true] | order(_updatedAt desc) [0...${lim}] ${vehicleProjection}`,
+	);
+	return (docs || []).map(sanityVehicleToApp);
+}
+
+/** Unsold inventory, newest Sanity documents first (overview dashboard). */
+export async function fetchRecentlyAddedStock(limit = 8) {
+	if (!sanity) return [];
+	const lim = Math.min(Math.max(1, Number(limit) || 8), 50);
+	const docs = await sanity.fetch(
+		`*[_type == "vehicle" && sold != true] | order(_createdAt desc) [0...${lim}] ${vehicleProjection}`,
 	);
 	return (docs || []).map(sanityVehicleToApp);
 }

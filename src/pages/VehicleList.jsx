@@ -85,7 +85,8 @@ const EXPORT_COLUMNS = [
 export function VehicleList() {
 	const [vehicles, setVehicles] = useState([]);
 	const [loading, setLoading] = useState(true);
-	const [inventoryLoadMessage, setInventoryLoadMessage] = useState("Fetching vehicles…");
+	const [inventoryLoadMessage, setInventoryLoadMessage] =
+		useState("Fetching vehicles…");
 	const [availableBrands, setAvailableBrands] = useState([]);
 	const [brandsLoading, setBrandsLoading] = useState(true);
 	const [page, setPage] = useState(1);
@@ -143,11 +144,26 @@ export function VehicleList() {
 
 	useEffect(() => {
 		fetchVehicles();
-	}, [page, searchQuery, brandFilter, modelFilter, statusFilter, pendingPlateFilter, maxPriceInput]);
+	}, [
+		page,
+		searchQuery,
+		brandFilter,
+		modelFilter,
+		statusFilter,
+		pendingPlateFilter,
+		maxPriceInput,
+	]);
 
 	useEffect(() => {
 		fetchModelCounts();
-	}, [searchQuery, brandFilter, modelFilter, statusFilter, pendingPlateFilter, maxPriceInput]);
+	}, [
+		searchQuery,
+		brandFilter,
+		modelFilter,
+		statusFilter,
+		pendingPlateFilter,
+		maxPriceInput,
+	]);
 
 	function listFilters() {
 		const maxPrice = maxPriceInput.trim() ? parseFloat(maxPriceInput) : null;
@@ -157,7 +173,10 @@ export function VehicleList() {
 				search: searchQuery.trim() || undefined,
 				brand: brandFilter || undefined,
 				model: modelFilter || undefined,
-				maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+				maxPrice:
+					maxPrice != null && !isNaN(maxPrice) && maxPrice > 0
+						? maxPrice
+						: undefined,
 				pendingPlateOnly: pendingPlateFilter ? true : undefined,
 			};
 		}
@@ -172,7 +191,10 @@ export function VehicleList() {
 			search: searchQuery.trim() || undefined,
 			brand: brandFilter || undefined,
 			model: modelFilter || undefined,
-			maxPrice: maxPrice != null && !isNaN(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+			maxPrice:
+				maxPrice != null && !isNaN(maxPrice) && maxPrice > 0
+					? maxPrice
+					: undefined,
 			pendingPlateOnly: pendingPlateFilter ? true : undefined,
 		};
 
@@ -204,9 +226,14 @@ export function VehicleList() {
 			const filters = listFilters();
 			if (!filters.status) delete filters.status;
 			const from = (page - 1) * PAGE_SIZE;
-			const { items, total } = await fetchVehiclesPage(filters, from, PAGE_SIZE, {
-				includeTotal: page === 1,
-			});
+			const { items, total } = await fetchVehiclesPage(
+				filters,
+				from,
+				PAGE_SIZE,
+				{
+					includeTotal: page === 1,
+				},
+			);
 			setVehicles(items);
 			if (typeof total === "number") setTotalCount(total);
 		} catch (err) {
@@ -334,10 +361,13 @@ export function VehicleList() {
 						Vehicle Stock
 					</h1>
 					<p className="text-zinc-500 text-sm mt-1.5">
-						{canExport ? "Browse and manage your fleet" : "Browse fleet (view only)"}
+						{canExport
+							? "Browse and manage your fleet"
+							: "Browse fleet (view only)"}
 						{soldArchiveMode ? (
 							<span className="block text-emerald-400/95 text-[13px] mt-2 font-medium">
-								Sold archive · only vehicles marked sold (hidden from normal stock view)
+								Sold archive · only vehicles marked sold (hidden from normal
+								stock view)
 							</span>
 						) : null}
 					</p>
@@ -389,7 +419,9 @@ export function VehicleList() {
 
 			<div className="mb-4 flex flex-col sm:flex-row sm:flex-wrap gap-4 items-stretch sm:items-end">
 				<div className="flex-1 min-w-[200px] max-w-xl">
-					<label className="block text-xs text-zinc-500 mb-1">Search stock ID or plate</label>
+					<label className="block text-xs text-zinc-500 mb-1">
+						Search stock ID or plate
+					</label>
 					<div className="relative">
 						<SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 pointer-events-none" />
 						<input
@@ -406,7 +438,9 @@ export function VehicleList() {
 					</div>
 				</div>
 				<div>
-					<label className="block text-xs text-zinc-500 mb-1">Max price (£)</label>
+					<label className="block text-xs text-zinc-500 mb-1">
+						Max price (£)
+					</label>
 					<input
 						type="number"
 						min="0"
@@ -462,7 +496,9 @@ export function VehicleList() {
 							: "bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/60"
 					}`}
 					title={
-						soldArchiveMode ? "Leave sold archive (return to active stock)" : "Show sold vehicles only"
+						soldArchiveMode
+							? "Leave sold archive (return to active stock)"
+							: "Show sold vehicles only"
 					}
 					aria-pressed={soldArchiveMode}
 				>
@@ -495,7 +531,11 @@ export function VehicleList() {
 			</div>
 
 			{loading ? (
-				<LoadingState message={inventoryLoadMessage} variant="embedded" className="py-28" />
+				<LoadingState
+					message={inventoryLoadMessage}
+					variant="embedded"
+					className="py-28"
+				/>
 			) : vehicles.length === 0 ? (
 				<div className="text-center py-28 rounded-2xl border border-zinc-800/50 bg-zinc-900/40">
 					<div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-zinc-800/60 flex items-center justify-center">
@@ -513,9 +553,13 @@ export function VehicleList() {
 			) : (
 				<>
 					<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-					{vehicles.map((v) => (
-						<VehicleCard key={v.id} vehicle={v} modelCount={getModelCount(v)} />
-					))}
+						{vehicles.map((v) => (
+							<VehicleCard
+								key={v.id}
+								vehicle={v}
+								modelCount={getModelCount(v)}
+							/>
+						))}
 					</div>
 
 					{totalPages > 1 && (
@@ -533,7 +577,10 @@ export function VehicleList() {
 								<div className="flex items-center gap-1">
 									{getPageNumbers(page, totalPages).map((p, i) =>
 										p === "..." ? (
-											<span key={`ellipsis-${i}`} className="px-2 text-zinc-500">
+											<span
+												key={`ellipsis-${i}`}
+												className="px-2 text-zinc-500"
+											>
 												…
 											</span>
 										) : (
@@ -549,7 +596,7 @@ export function VehicleList() {
 											>
 												{p}
 											</button>
-										)
+										),
 									)}
 								</div>
 								<button
@@ -563,7 +610,8 @@ export function VehicleList() {
 								</button>
 							</div>
 							<span className="text-zinc-500 text-sm font-medium">
-								{totalCount} vehicle{totalCount !== 1 ? "s" : ""} · Page {page} of {totalPages}
+								{totalCount} vehicle{totalCount !== 1 ? "s" : ""} · Page {page}{" "}
+								of {totalPages}
 							</span>
 						</div>
 					)}
@@ -693,9 +741,12 @@ export function VehicleList() {
 									className="mt-1 rounded border-zinc-600 text-amber-500 focus:ring-amber-500/40 shrink-0"
 								/>
 								<span className="text-sm text-zinc-300 group-hover:text-white transition">
-									<span className="font-medium text-orange-300">Pending number plate only</span>
+									<span className="font-medium text-orange-300">
+										Pending number plate only
+									</span>
 									<span className="block text-zinc-500 text-xs mt-0.5 font-normal">
-										Stock rows with no plate saved yet (can combine with brand and status filters).
+										Stock rows with no plate saved yet (can combine with brand
+										and status filters).
 									</span>
 								</span>
 							</label>

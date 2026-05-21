@@ -126,7 +126,7 @@ function HomeRedirect() {
 	return <Navigate to={user ? "/app" : "/find"} replace />;
 }
 
-/** Guests only have inventory:view — send them to inventory; staff with search:view keep overview search. */
+/** Home: overview for search:view; otherwise jump to inventory when allowed. */
 function AppHomeIndex() {
 	const { hasPermission } = useAuth();
 	if (hasPermission("search:view")) {
@@ -261,7 +261,7 @@ function AppRoutes() {
 					path="search"
 					element={
 						<RequirePermission permission="search:view">
-							<Search />
+							<Navigate to="/app" replace />
 						</RequirePermission>
 					}
 				/>
