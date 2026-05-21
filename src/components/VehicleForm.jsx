@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { fetchVehicleLocations, saveVehicle, deleteReservationWorkflowUpdatesForVehicle, fetchBrandsAndModels } from '../lib/sanityData'
 import { serializePdiForStorage, seedPdiFromVehicleAndCustomer } from '../lib/pdiInspectionModel'
 import { formatSanityMutationError } from '../lib/sanity'
@@ -181,6 +181,8 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
   const [imagePreviews, setImagePreviews] = useState([])
   const [imagesToRemove, setImagesToRemove] = useState([])
   const [imageCompressing, setImageCompressing] = useState(false)
+  const imageDropDepth = useRef(0)
+  const [imageDropActive, setImageDropActive] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState([])
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false)
   const [locationQuery, setLocationQuery] = useState('')
@@ -240,33 +242,6 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
     const t = setTimeout(() => fetchLocations(locationQuery), 200)
     return () => clearTimeout(t)
   }, [locationQuery, fetchLocations])
-
-  const handleImageChange = async (e) => {
-    const input = e.target
-    const files = Array.from(input.files || [])
-    input.value = ''
-    const existingKept = (vehicle?.images || []).length - imagesToRemove.length
-    const room = MAX_VEHICLE_IMAGES - existingKept - imageFiles.length
-    if (room <= 0) {
-      addNotification(`Maximum ${MAX_VEHICLE_IMAGES} images allowed`, 'error')
-      return
-    }
-    const toProcess = files.slice(0, room)
-    if (!toProcess.length) return
-    if (files.length > room) {
-      addNotification(`Only ${room} more image(s) added (max ${MAX_VEHICLE_IMAGES} total)`, 'info')
-    }
-    setImageCompressing(true)
-    try {
-      const compressed = await compressImages(toProcess)
-      const toAdd = compressed.slice(0, room)
-      const maxNew = MAX_VEHICLE_IMAGES - existingKept
-      setImageFiles((prev) => [...prev, ...toAdd].slice(0, maxNew))
-      setImagePreviews((prev) => [...prev, ...toAdd.map((f) => URL.createObjectURL(f))].slice(0, maxNew))
-    } finally {
-      setImageCompressing(false)
-    }
-  }
 
   const removeImage = (idx) => {
     URL.revokeObjectURL(imagePreviews[idx])
@@ -494,6 +469,91 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
   const existingImages = vehicle?.images || []
   const displayedExisting = existingImages.filter((img) => !imagesToRemove.includes(img.id))
   const totalImageCount = displayedExisting.length + imageFiles.length
+  const canAcceptMoreImages = totalImageCount < MAX_VEHICLE_IMAGES && !imageCompressing
+
+  const processNewImageFiles = useCallback(
+    async (rawFiles) => {
+      const picked = rawFiles instanceof FileList ? Array.from(rawFiles) : Array.from(rawFiles || [])
+      const files = picked.filter((f) => f.type.startsWith('image/'))
+      if (!files.length) {
+        if (picked.length) addNotification('Only image files can be added.', 'info')
+        return
+      }
+      const existingKept = (vehicle?.images || []).length - imagesToRemove.length
+      const room = MAX_VEHICLE_IMAGES - existingKept - imageFiles.length
+      if (room <= 0) {
+        addNotification(`Maximum ${MAX_VEHICLE_IMAGES} images allowed`, 'error')
+        return
+      }
+      const toProcess = files.slice(0, room)
+      if (!toProcess.length) return
+      if (files.length > room) {
+        addNotification(`Only ${room} more image(s) added (max ${MAX_VEHICLE_IMAGES} total)`, 'info')
+      }
+      setImageCompressing(true)
+      try {
+        const compressed = await compressImages(toProcess)
+        const toAdd = compressed.slice(0, room)
+        const maxNew = MAX_VEHICLE_IMAGES - existingKept
+        setImageFiles((prev) => [...prev, ...toAdd].slice(0, maxNew))
+        setImagePreviews((prev) => [...prev, ...toAdd.map((f) => URL.createObjectURL(f))].slice(0, maxNew))
+      } finally {
+        setImageCompressing(false)
+      }
+    },
+    [vehicle?.images, imagesToRemove.length, imageFiles.length, addNotification],
+  )
+
+  const handleImageChange = async (e) => {
+    const input = e.target
+    const files = Array.from(input.files || [])
+    input.value = ''
+    await processNewImageFiles(files)
+  }
+
+  const onImagesDragEnter = useCallback(
+    (e) => {
+      if (!e.dataTransfer.types?.includes?.('Files')) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (!canAcceptMoreImages) return
+      imageDropDepth.current += 1
+      setImageDropActive(true)
+    },
+    [canAcceptMoreImages],
+  )
+
+  const onImagesDragLeave = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    imageDropDepth.current -= 1
+    if (imageDropDepth.current <= 0) {
+      imageDropDepth.current = 0
+      setImageDropActive(false)
+    }
+  }, [])
+
+  const onImagesDragOver = useCallback(
+    (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (canAcceptMoreImages) e.dataTransfer.dropEffect = 'copy'
+      else e.dataTransfer.dropEffect = 'none'
+    },
+    [canAcceptMoreImages],
+  )
+
+  const onImagesDrop = useCallback(
+    async (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      imageDropDepth.current = 0
+      setImageDropActive(false)
+      if (!canAcceptMoreImages) return
+      await processNewImageFiles(e.dataTransfer.files)
+    },
+    [canAcceptMoreImages, processNewImageFiles],
+  )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -704,8 +764,22 @@ export function VehicleForm({ vehicle, onSuccess, initialOpenSale }) {
         <VehicleField label={`Images (up to ${MAX_VEHICLE_IMAGES}, compressed before upload)`}>
           <p className="text-[11px] text-zinc-600 mb-2">
             Photos are resized and compressed in the browser to save bandwidth and storage.
+            <span className="text-zinc-500">
+              {' '}
+              Click the add tile or drag and drop images onto the thumbnails area.
+            </span>
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className={`flex flex-wrap gap-2 rounded-xl transition-[box-shadow,background-color,padding] ${
+              imageDropActive && canAcceptMoreImages
+                ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-zinc-950 bg-amber-500/[0.08] p-2'
+                : ''
+            }`}
+            onDragEnter={onImagesDragEnter}
+            onDragLeave={onImagesDragLeave}
+            onDragOver={onImagesDragOver}
+            onDrop={onImagesDrop}
+          >
             {displayedExisting.map((img) => (
               <div key={img.id} className="relative w-20 h-20 rounded-lg overflow-hidden bg-zinc-700">
                 <img src={img.url} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
