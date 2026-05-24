@@ -1,8 +1,36 @@
-import { Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Shield, ArrowLeft } from "lucide-react";
 import { Footer } from "../components/Footer";
 
+/** SPA-only path carried on `navigate`/`<Link state>` — blocks open redirects. */
+function safeBackPath(from) {
+	if (typeof from !== "string") return null;
+	const p = from.trim();
+	if (!p.startsWith("/") || p.startsWith("//")) return null;
+	return p;
+}
+
 export function Privacy() {
+	const navigate = useNavigate();
+	const location = useLocation();
+	const here = `${location.pathname}${location.search}${location.hash}`;
+	const candidate = safeBackPath(location.state?.from);
+	const explicitBack =
+		candidate && candidate !== here ? candidate : null;
+
+	function handleBack(ev) {
+		ev.preventDefault();
+		if (explicitBack) {
+			navigate(explicitBack);
+			return;
+		}
+		if (typeof window !== "undefined" && window.history.length > 1) {
+			navigate(-1);
+			return;
+		}
+		navigate("/find");
+	}
+
 	return (
 		<div className="min-h-screen bg-zinc-950 text-white">
 			<div
@@ -10,13 +38,14 @@ export function Privacy() {
 				aria-hidden
 			/>
 			<main className="relative max-w-2xl mx-auto px-4 pt-6 pb-24">
-				<Link
-					to="/"
+				<button
+					type="button"
+					onClick={handleBack}
 					className="inline-flex items-center gap-2 text-zinc-400 hover:text-amber-400 text-sm mb-6 transition"
 				>
 					<ArrowLeft className="w-4 h-4" />
 					Back
-				</Link>
+				</button>
 
 				<div className="flex items-center gap-3 mb-8">
 					<div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">

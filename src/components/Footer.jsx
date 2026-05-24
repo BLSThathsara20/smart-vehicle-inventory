@@ -1,6 +1,10 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 export function Footer() {
+  const { pathname, search, hash } = useLocation()
+  /** When opening Privacy so Back returns here (e.g. booking → privacy → booking). */
+  const fromPublicPath = `${pathname}${search}${hash}`
+
   return (
     <footer className="w-full pt-6 pb-safe-public text-center text-slate-500 text-sm">
       <p>
@@ -18,12 +22,13 @@ export function Footer() {
           Scheduled collections
         </Link>
         {' · '}
-        <Link to="/privacy" className="text-amber-400 hover:text-amber-300">
-          Privacy notice (UK)
+        <Link
+          to="/privacy"
+          state={{ from: fromPublicPath }}
+          className="text-amber-400 hover:text-amber-300"
+        >
+          Privacy & Data Protection
         </Link>
-      </p>
-      <p className="mt-2 text-[11px] text-slate-600 max-w-xl mx-auto">
-        UK GDPR &amp; Data Protection Act 2018 — how we handle personal information.
       </p>
     </footer>
   )

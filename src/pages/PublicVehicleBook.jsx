@@ -381,15 +381,6 @@ export function PublicVehicleBook() {
                 Mon–Sat <span className="text-zinc-200 font-medium">10am–7pm</span> · Sun{' '}
                 <span className="text-zinc-200 font-medium">12:30pm–3:30pm</span>.
               </p>
-              <p className="mt-3 text-[12px] text-zinc-500 leading-snug">
-                UK — how we handle your details:{' '}
-                <Link
-                  to="/privacy"
-                  className="font-medium text-sky-400/95 hover:text-sky-300 underline underline-offset-2"
-                >
-                  Privacy &amp; data protection
-                </Link>
-              </p>
             </div>
           </div>
 
@@ -796,18 +787,6 @@ export function PublicVehicleBook() {
                     className="min-h-[4rem] w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600 leading-snug"
                   />
                 </div>
-
-                <p className="text-[11px] text-zinc-500 leading-relaxed pb-1">
-                  By sending this request you agree we may contact you about this viewing using the details provided.
-                  See how we protect your information under UK law:{' '}
-                  <Link
-                    to="/privacy"
-                    className="font-medium text-sky-400/95 hover:text-sky-300 underline underline-offset-2"
-                  >
-                    Privacy &amp; data protection notice
-                  </Link>
-                  .
-                </p>
 
                 <div
                   className="pointer-events-none absolute left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
