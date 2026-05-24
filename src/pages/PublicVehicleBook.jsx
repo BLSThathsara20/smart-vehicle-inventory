@@ -171,7 +171,7 @@ export function PublicVehicleBook() {
   const canBook = vehicle && !isSold && !isReserved
 
   function openModal() {
-    if (!canBook || !BOOKING_FN_CONFIGURED) return
+    if (!canBook) return
     setBookedOk(false)
     setSelectedDate(undefined)
     setSelectedSlotId(null)
@@ -184,7 +184,15 @@ export function PublicVehicleBook() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!id || !canBook || !BOOKING_FN_CONFIGURED || submitting) return
+    if (!id || !canBook || submitting) return
+
+    if (!BOOKING_FN_CONFIGURED) {
+      addNotification(
+        'Online submit isn’t connected yet (missing booking URL on this site). Please call the showroom with your chosen date and time.',
+        'error',
+      )
+      return
+    }
 
     const nameClean = sanitizeCustomerPlainText(customerName, 120)
     const phoneClean = sanitizeCustomerPhone(customerPhone, 40)
@@ -333,21 +341,22 @@ export function PublicVehicleBook() {
 
           <button
             type="button"
-            disabled={!canBook || !BOOKING_FN_CONFIGURED}
+            disabled={!canBook}
             onClick={openModal}
             className="mt-5 w-full min-h-[52px] py-4 sm:py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base transition shadow-md shadow-sky-900/40 touch-manipulation"
           >
-            {canBook ? (BOOKING_FN_CONFIGURED ? 'Choose date & time' : 'Online booking unavailable') : 'Booking unavailable'}
+            {canBook ? 'Choose date & time' : 'Booking unavailable'}
           </button>
 
           {canBook && !BOOKING_FN_CONFIGURED && (
-            <p className="mt-3 text-sm text-zinc-500 leading-relaxed">
-              Online booking isn&apos;t switched on yet. Please call or message the showroom and we&apos;ll arrange a viewing.
+            <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+              Tap above to pick a slot (Mon–Sat 10am–7pm, Sun 12:30–3:30pm). Sending the request online needs the booking
+              service URL on this site — if submit isn’t available, call the showroom with your chosen time.
             </p>
           )}
           {import.meta.env.DEV && canBook && !BOOKING_FN_CONFIGURED && (
-            <p className="mt-1.5 text-[10px] text-zinc-600 font-mono">
-              Dev: add VITE_PUBLIC_VIEWING_BOOKING_URL and deploy submitPublicViewingBooking (functions/README.md).
+            <p className="mt-1.5 text-[10px] text-zinc-600 font-mono leading-snug">
+              Dev: add VITE_PUBLIC_VIEWING_BOOKING_URL → deploy submitPublicViewingBooking (see functions/README.md).
             </p>
           )}
         </div>
@@ -587,6 +596,13 @@ export function PublicVehicleBook() {
                   Mon–Sat use full-day hours below; Sundays use shortened hours. Slots are every 30 minutes during
                   opening hours.
                 </p>
+
+                {!BOOKING_FN_CONFIGURED ? (
+                  <p className="text-sm text-sky-100/95 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 leading-snug">
+                    Pick a slot below within opening hours. Sending your details online only works after this site is
+                    linked to the booking service — if needed, call the showroom with the time you chose here.
+                  </p>
+                ) : null}
 
                 <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2 sm:p-2 overflow-x-auto">
                   <DayPicker
