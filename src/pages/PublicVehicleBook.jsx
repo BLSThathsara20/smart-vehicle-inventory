@@ -14,12 +14,12 @@ import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
 import { useNotification } from '../context/NotificationContext'
+import {
+  publicBookingTimeSlotsForDay,
+  isPublicBookingDaySelectable,
+} from '../lib/publicBookingHours'
 
-const TIME_PRESETS = [
-  { id: 'morning', label: 'Morning', hint: 'Roughly 9am–12pm', hour: 10 },
-  { id: 'afternoon', label: 'Afternoon', hint: 'Roughly 12pm–3pm', hour: 14 },
-  { id: 'evening', label: 'Evening', hint: 'Roughly 3pm–6pm', hour: 17 },
-]
+const BOOKING_FN_CONFIGURED = Boolean(String(import.meta.env.VITE_PUBLIC_VIEWING_BOOKING_URL || '').trim())
 
 function startOfLocalDay(d) {
   const x = new Date(d)
@@ -27,9 +27,9 @@ function startOfLocalDay(d) {
   return x
 }
 
-function buildSlotIso(selectedDay, hour) {
+function buildSlotIso(selectedDay, slot) {
   const d = startOfLocalDay(selectedDay)
-  d.setHours(Number(hour), 0, 0, 0)
+  d.setHours(Number(slot.hour), Number(slot.minute), 0, 0)
   return d.toISOString()
 }
 
@@ -46,7 +46,7 @@ export function PublicVehicleBook() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState(undefined)
-  const [timePreset, setTimePreset] = useState(null)
+  const [selectedSlotId, setSelectedSlotId] = useState(null)
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
@@ -56,7 +56,7 @@ export function PublicVehicleBook() {
   const [submitting, setSubmitting] = useState(false)
   const [bookedOk, setBookedOk] = useState(false)
 
-  const todayStart = useMemo(() => startOfLocalDay(new Date()), [])
+  const todayStart = useMemo(() => startOfLocalDay(new Date()), [modalOpen])
   const maxDay = useMemo(() => {
     const m = new Date()
     m.setDate(m.getDate() + 60)
@@ -92,13 +92,25 @@ export function PublicVehicleBook() {
     reload()
   }, [reload])
 
+  const slotsForDay = useMemo(() => publicBookingTimeSlotsForDay(selectedDate), [selectedDate])
+
+  useEffect(() => {
+    setSelectedSlotId((prev) => {
+      const slots = publicBookingTimeSlotsForDay(selectedDate)
+      if (prev && slots.some((s) => s.id === prev)) return prev
+      return null
+    })
+  }, [selectedDate])
+
   const isSold = vehicle?.sold
   const isReserved = vehicle?.reserved && !vehicle?.sold
   const canBook = vehicle && !isSold && !isReserved
 
   function openModal() {
-    if (!canBook) return
+    if (!canBook || !BOOKING_FN_CONFIGURED) return
     setBookedOk(false)
+    setSelectedDate(undefined)
+    setSelectedSlotId(null)
     setModalOpen(true)
   }
 
@@ -108,7 +120,7 @@ export function PublicVehicleBook() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!id || !canBook || submitting) return
+    if (!id || !canBook || !BOOKING_FN_CONFIGURED || submitting) return
 
     const nameClean = sanitizeCustomerPlainText(customerName, 120)
     const phoneClean = sanitizeCustomerPhone(customerPhone, 40)
@@ -127,14 +139,14 @@ export function PublicVehicleBook() {
       addNotification('Choose a day from the calendar.', 'error')
       return
     }
-    if (!timePreset) {
-      addNotification('Pick a rough time of day (morning, afternoon, or evening).', 'error')
+    if (!selectedSlotId) {
+      addNotification('Pick one of the available times.', 'error')
       return
     }
-    const preset = TIME_PRESETS.find((p) => p.id === timePreset)
-    if (!preset) return
+    const slot = slotsForDay.find((s) => s.id === selectedSlotId)
+    if (!slot) return
 
-    const scheduled_at = buildSlotIso(selectedDate, preset.hour)
+    const scheduled_at = buildSlotIso(selectedDate, slot)
 
     setSubmitting(true)
     try {
@@ -151,7 +163,7 @@ export function PublicVehicleBook() {
       addNotification('Request sent — the team will confirm your viewing.', 'success')
       setModalOpen(false)
       setSelectedDate(undefined)
-      setTimePreset(null)
+      setSelectedSlotId(null)
       setCustomerName('')
       setCustomerPhone('')
       setCustomerEmail('')
@@ -220,7 +232,9 @@ export function PublicVehicleBook() {
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-bold text-white leading-tight">Book a viewing</h1>
               <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
-                Pick a day and a rough time. We&apos;ll add this to our diary and confirm with you — no account needed.
+                Mon–Fri <span className="text-zinc-300">10am–7pm</span>, Sun{' '}
+                <span className="text-zinc-300">12:30pm–3:30pm</span> (half-hour slots). Closed Saturdays. Times shown
+                in your device&apos;s timezone; we&apos;ll confirm with you before you arrive.
               </p>
             </div>
           </div>
@@ -245,17 +259,21 @@ export function PublicVehicleBook() {
 
           <button
             type="button"
-            disabled={!canBook}
+            disabled={!canBook || !BOOKING_FN_CONFIGURED}
             onClick={openModal}
             className="mt-5 w-full py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition shadow-md shadow-sky-900/40"
           >
-            {canBook ? 'Choose date & time' : 'Booking unavailable'}
+            {canBook ? (BOOKING_FN_CONFIGURED ? 'Choose date & time' : 'Online booking unavailable') : 'Booking unavailable'}
           </button>
 
-          {!import.meta.env.VITE_PUBLIC_VIEWING_BOOKING_URL && (
-            <p className="mt-3 text-[11px] text-amber-200/85 leading-relaxed">
-              Booking isn&apos;t wired up yet (missing <span className="font-mono">VITE_PUBLIC_VIEWING_BOOKING_URL</span>).
-              Your dealer can deploy the cloud function from the repo README.
+          {canBook && !BOOKING_FN_CONFIGURED && (
+            <p className="mt-3 text-sm text-zinc-500 leading-relaxed">
+              Online booking isn&apos;t switched on yet. Please call or message the showroom and we&apos;ll arrange a viewing.
+            </p>
+          )}
+          {import.meta.env.DEV && canBook && !BOOKING_FN_CONFIGURED && (
+            <p className="mt-1.5 text-[10px] text-zinc-600 font-mono">
+              Dev: add VITE_PUBLIC_VIEWING_BOOKING_URL and deploy submitPublicViewingBooking (functions/README.md).
             </p>
           )}
         </div>
@@ -364,7 +382,8 @@ export function PublicVehicleBook() {
             <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col relative">
               <div className="p-4 space-y-4 customer-booking-calendar">
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Times use your device&apos;s local timezone. We&apos;ll confirm the exact slot with you.
+                  Saturdays are closed. Sundays use shortened hours below. Slots are every 30 minutes during opening
+                  hours.
                 </p>
 
                 <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
@@ -375,6 +394,7 @@ export function PublicVehicleBook() {
                     disabled={[
                       { before: todayStart },
                       { after: maxDay },
+                      (day) => !isPublicBookingDaySelectable(day),
                     ]}
                     showOutsideDays
                     fixedWeeks
@@ -382,24 +402,29 @@ export function PublicVehicleBook() {
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Rough time</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {TIME_PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setTimePreset(p.id)}
-                        className={`rounded-xl border px-2 py-2.5 text-center transition ${
-                          timePreset === p.id
-                            ? 'border-sky-500 bg-sky-500/15 text-sky-200'
-                            : 'border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600'
-                        }`}
-                      >
-                        <span className="block text-sm font-semibold">{p.label}</span>
-                        <span className="block text-[10px] text-zinc-500 mt-0.5 leading-tight">{p.hint}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Time</p>
+                  {!selectedDate ? (
+                    <p className="text-xs text-zinc-500">Tap a weekday or Sunday above to load available times.</p>
+                  ) : slotsForDay.length === 0 ? (
+                    <p className="text-xs text-zinc-500">That day isn’t available.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {slotsForDay.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSelectedSlotId(s.id)}
+                          className={`rounded-lg border px-1.5 py-2 text-center text-xs font-medium transition ${
+                            selectedSlotId === s.id
+                              ? 'border-sky-500 bg-sky-500/15 text-sky-200'
+                              : 'border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>

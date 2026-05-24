@@ -18,6 +18,7 @@ const { onRequest } = require('firebase-functions/v2/https')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
 const { createClient } = require('@sanity/client')
+const { DateTime } = require('luxon')
 
 if (!admin.apps.length) {
   admin.initializeApp()
@@ -179,6 +180,54 @@ function digitsOnlyCount(s) {
   return (String(s || '').match(/\d/g) || []).length
 }
 
+/**
+ * Validates wall-clock instant in PUBLIC_BOOKING_TIMEZONE (Luxon weekdays: Mon=1 … Sun=7).
+ * Weekdays Mon–Fri 10:00–last start 18:30; Sun 12:30–15:00 starts; Sat closed.
+ */
+function validatePublicBookingOpeningHours(scheduledIso) {
+  const tz = process.env.PUBLIC_BOOKING_TIMEZONE || 'Europe/London'
+  const dt = DateTime.fromISO(String(scheduledIso), { setZone: true })
+  if (!dt.isValid) {
+    return { ok: false, error: 'Invalid date and time.' }
+  }
+
+  const local = dt.setZone(tz)
+  const totalMinutes =
+    Math.round(local.hour * 60 + local.minute + local.second / 60 + local.millisecond / 60000)
+
+  if (Math.abs(totalMinutes - Math.round(totalMinutes / 30) * 30) > 0.001) {
+    return { ok: false, error: 'Choose a slot from the booking calendar.' }
+  }
+
+  const dow = local.weekday // 6 = Sat, 7 = Sun
+
+  if (dow === 6) {
+    return { ok: false, error: 'We are closed on Saturdays.' }
+  }
+
+  // Mon–Fri
+  if (dow >= 1 && dow <= 5) {
+    const open = 10 * 60
+    const latestStart = 18 * 60 + 30
+    if (totalMinutes < open || totalMinutes > latestStart) {
+      return { ok: false, error: 'Weekday viewing hours are 10am–7pm (half-hour slots).' }
+    }
+    return { ok: true }
+  }
+
+  // Sunday only
+  if (dow === 7) {
+    const earliest = 12 * 60 + 30
+    const latestStart = 15 * 60
+    if (totalMinutes < earliest || totalMinutes > latestStart) {
+      return { ok: false, error: 'Sunday viewing hours are 12:30pm–3:30pm.' }
+    }
+    return { ok: true }
+  }
+
+  return { ok: false, error: 'That day cannot be booked online.' }
+}
+
 function bookingOriginAllowed(req) {
   const list = process.env.PUBLIC_BOOKING_ALLOWED_ORIGINS
   if (!list || !String(list).trim()) return true
@@ -279,6 +328,12 @@ exports.submitPublicViewingBooking = onRequest(
     }
     if (d.getTime() > now + 91 * 24 * 60 * 60 * 1000) {
       res.status(400).json({ ok: false, error: 'That date is too far ahead.' })
+      return
+    }
+
+    const openCheck = validatePublicBookingOpeningHours(scheduled_at)
+    if (!openCheck.ok) {
+      res.status(400).json({ ok: false, error: openCheck.error })
       return
     }
 

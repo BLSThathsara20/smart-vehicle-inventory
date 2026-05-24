@@ -35,16 +35,25 @@ Set in Firebase / Google Cloud for this function:
 | `SANITY_DATASET` | e.g. `production` |
 | `SANITY_API_TOKEN` | **Editor** (or capable of **patch** on `vehicle` documents — not Viewer-only) |
 | `PUBLIC_BOOKING_ALLOWED_ORIGINS` | Optional comma-separated URL **prefixes** (e.g. `https://yourdomain.com,https://user.github.io/smart-vehicle-inventory`). If set, **`Origin`** or **`Referer`** must start with one. Leave unset for open CORS behaviour while prototyping. |
+| `PUBLIC_BOOKING_TIMEZONE` | **[Luxon](https://moment.github.io/luxon/)** IANA zone for opening-hour checks (default **`Europe/London`**). Should match where your weekday/Sunday rules apply.
 
-Frontend: set **`VITE_PUBLIC_VIEWING_BOOKING_URL`** to the HTTPS URL printed after deploy, e.g.
+### Opening hours enforced server-side
 
-`https://us-central1-PROJECT.cloudfunctions.net/submitPublicViewingBooking`
+- **Monday–Friday:** half-hour slots from **10:00** through **18:30** (last slot ends by 19:00).  
+- **Sunday:** slots from **12:30** through **15:00** (closes 15:30).  
+- **Saturday:** not bookable.
+
+The browser calendar mirrors this; spoofed ISO values outside these windows get **400** from the function.
+
+Frontend: set **`VITE_PUBLIC_VIEWING_BOOKING_URL`** in the SPA `.env` to the deployed function URL, e.g.
+`https://us-central1-PROJECT.cloudfunctions.net/submitPublicViewingBooking`.
 
 ### Security notes
 
 - Hidden **honeypot** field `hp_company` — bots that fill it get a silent success response.
 - Inputs are trimmed, length-capped, and stripped of control characters and `<` `>` tags.
 - **Sold** / **reserved** vehicles are rejected.
+- Appointment time must fall on allowed **Luxon weekday + half-hour slots** in `PUBLIC_BOOKING_TIMEZONE`.
 
 For abusive traffic in production: tighten **`PUBLIC_BOOKING_ALLOWED_ORIGINS`**, add rate limiting (e.g. Cloud Armor), or **App Check**.
 
