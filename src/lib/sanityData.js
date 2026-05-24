@@ -1750,6 +1750,50 @@ export async function fetchSimilarVehiclesPool(excludeId) {
 	return (docs || []).map(sanityVehicleToApp);
 }
 
+const publicCarouselVehicleProjection = `{
+	_id,
+	stock_id,
+	brand,
+	model,
+	model_year,
+	mileage,
+	"images": images[0...0]{ _key, url, sortOrder }
+}`;
+
+function sanityCarouselVehicleToApp(doc) {
+	if (!doc) return null;
+	const images = (doc.images || []).map((img, i) => ({
+		id: img._key || `img-${i}`,
+		url: img.url,
+		sort_order: img.sortOrder ?? i,
+	}));
+	return {
+		id: doc._id,
+		stock_id: doc.stock_id,
+		brand: doc.brand,
+		model: doc.model,
+		model_year: doc.model_year,
+		mileage: doc.mileage,
+		sold: false,
+		reserved: false,
+		images,
+	};
+}
+
+/** Same brand & model, available stock — carousel on public booking page */
+export async function fetchPublicBookingAlternatesByModel(excludeId, brand, model, limit = 24) {
+	if (!sanity || !excludeId) return [];
+	const b = String(brand ?? "").trim();
+	const mo = String(model ?? "").trim();
+	if (!b || !mo) return [];
+	const lim = Math.min(Math.max(1, Number(limit) || 24), 48);
+	const docs = await sanity.fetch(
+		`*[_type == "vehicle" && sold == false && reserved == false && _id != $ex && lower(brand) == lower($b) && lower(model) == lower($mo)][0...${lim}] ${publicCarouselVehicleProjection}`,
+		{ ex: excludeId, b, mo },
+	);
+	return (docs || []).map(sanityCarouselVehicleToApp).filter(Boolean);
+}
+
 export async function vehicleCounts() {
 	if (!sanity) return { available: 0, newly_arrived: 0, reserved: 0, sold: 0 };
 	const [available, newly_arrived, reserved, sold] = await Promise.all([

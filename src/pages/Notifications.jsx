@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { fetchActiveAppNotifications } from '../lib/notificationService'
+import { getNotificationAppearance } from '../lib/notificationVisuals'
 import { dismissViewingStaffAlert } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
@@ -20,6 +21,7 @@ import {
   AtSign,
   UserPlus,
   Wrench,
+  Globe,
 } from 'lucide-react'
 
 const PAGE_SIZE = 12
@@ -68,7 +70,17 @@ export function Notifications() {
   const getIcon = (type) => {
     if (type === 'delivery_today' || type === 'delivery_soon') return Calendar
     if (type === 'viewing_today' || type === 'viewing_soon') return CalendarClock
-    if (type === 'viewing_manager_alert' || type === 'viewing_mention' || type === 'viewing_team_ping')
+    if (
+      type === 'viewing_public_manager_alert' ||
+      type === 'viewing_public_mention' ||
+      type === 'viewing_public_team_ping'
+    )
+      return Globe
+    if (
+      type === 'viewing_manager_alert' ||
+      type === 'viewing_mention' ||
+      type === 'viewing_team_ping'
+    )
       return AtSign
     if (type === 'pdi_due') return ClipboardCheck
     if (type === 'full_service_due') return Wrench
@@ -130,11 +142,12 @@ export function Notifications() {
           Notifications
         </h1>
         <p className="text-zinc-500 text-sm mt-1">
-          Viewings and customer collections show when they&apos;re{' '}
-          <strong className="text-zinc-400">today, tomorrow, or the day after</strong> (calendar days in your timezone), with times like &quot;tomorrow at 11:00 PM&quot; on
-          bookings. MOT, prep-path work, PDI before collection (same window), team viewing alerts, and{' '}
-          <strong className="text-zinc-400">pending Google staff sign-ups</strong> (for admins) appear here too. Items disappear when dates pass or the
-          underlying record changes.
+          Colours help you spot what kind of alert it is (
+          <span className="text-cyan-400/95">cyan</span> website viewing requests,{' '}
+          <span className="text-amber-400/95">amber</span> team/staff viewing notes,{' '}
+          <span className="text-violet-400/95">violet</span> diary viewings,{' '}
+          <span className="text-sky-400/95">sky</span> collections, and distinct tones for PDI/MOT/work). Items drop when
+          dates pass or the record changes.
         </p>
         {canSettings ? (
           <p className="text-zinc-600 text-sm mt-2">
@@ -159,15 +172,10 @@ export function Notifications() {
           <div className="space-y-3">
             {pagedNotifications.map((n) => {
               const Icon = getIcon(n.type)
-              const isHigh = n.severity === 'high' && !n.relevantTaskDone
               const done = n.relevantTaskDone === true
-              const borderCls = done
-                ? 'bg-emerald-500/10 border-emerald-500/35'
-                : isHigh
-                  ? 'bg-amber-500/10 border-amber-500/30'
-                  : 'bg-zinc-900/50 border-zinc-800/60'
+              const vis = getNotificationAppearance(n, { relevantTaskDone: done })
               return (
-                <div key={n.id} className={`rounded-xl border overflow-hidden ${borderCls}`}>
+                <div key={n.id} className={`rounded-xl border overflow-hidden ${vis.bg} ${vis.border}`}>
                   <button
                     type="button"
                     onClick={() => openNotification(n)}
@@ -175,22 +183,14 @@ export function Notifications() {
                   >
                     <div className="flex items-start gap-3">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          done
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : isHigh
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : 'bg-zinc-800/60 text-zinc-400'
-                        }`}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${vis.iconBg}`}
                       >
                         {done ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p
-                            className={`font-semibold text-sm ${
-                              done ? 'text-emerald-300' : isHigh ? 'text-amber-400' : 'text-white'
-                            }`}
+                            className={`font-semibold text-sm ${vis.titleClass}`}
                           >
                             {n.title}
                           </p>
@@ -200,16 +200,16 @@ export function Notifications() {
                             </span>
                           ) : null}
                         </div>
-                        <p className={`text-xs mt-0.5 ${done ? 'text-emerald-200/70' : 'text-zinc-500'}`}>
+                        <p className={`text-xs mt-0.5 ${done ? 'text-emerald-200/70' : vis.bodyClass}`}>
                           {n.message}
                         </p>
                         {n.dueDate && (
-                          <p className={`text-[10px] mt-1 ${done ? 'text-emerald-200/45' : 'text-zinc-600'}`}>
+                          <p className={`text-[10px] mt-1 ${done ? 'text-emerald-200/45' : vis.dueClass}`}>
                             Due: {new Date(n.dueDate).toLocaleDateString()}
                           </p>
                         )}
                         {n.created_at && (
-                          <p className={`text-[10px] mt-1 ${done ? 'text-emerald-200/45' : 'text-zinc-600'}`}>
+                          <p className={`text-[10px] mt-1 ${done ? 'text-emerald-200/45' : vis.dueClass}`}>
                             {new Date(n.created_at).toLocaleString(undefined, {
                               dateStyle: 'short',
                               timeStyle: 'short',

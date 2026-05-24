@@ -461,6 +461,10 @@ function buildViewingStaffPingNotifications(uid, isManager, vehicles) {
       const showMgr = wantsMgr && isManager
       if (!showMgr && !isMentioned) continue
 
+      const isPublicCustomerBooking =
+        String(b.created_by_name || '').includes('booking link') ||
+        String(b.notes || '').trim().startsWith('[Public link]')
+
       const customer = (b.customer_name || '').trim() || 'Customer'
       const when = b.scheduled_at
         ? new Date(b.scheduled_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -474,17 +478,19 @@ function buildViewingStaffPingNotifications(uid, isManager, vehicles) {
       let type
       let severity
       if (showMgr && isMentioned) {
-        title = 'Viewing booked — you were mentioned'
-        type = 'viewing_team_ping'
+        title = isPublicCustomerBooking
+          ? 'Website viewing — mention + manager'
+          : 'Viewing booked — you were mentioned'
+        type = isPublicCustomerBooking ? 'viewing_public_team_ping' : 'viewing_team_ping'
         severity = 'high'
       } else if (isMentioned) {
-        title = 'You were mentioned on a viewing'
-        type = 'viewing_mention'
+        title = isPublicCustomerBooking ? 'Website viewing — mention' : 'You were mentioned on a viewing'
+        type = isPublicCustomerBooking ? 'viewing_public_mention' : 'viewing_mention'
         severity = 'high'
       } else {
-        title = 'New viewing booked'
-        type = 'viewing_manager_alert'
-        severity = 'medium'
+        title = isPublicCustomerBooking ? 'Customer booked viewing online' : 'New viewing booked'
+        type = isPublicCustomerBooking ? 'viewing_public_manager_alert' : 'viewing_manager_alert'
+        severity = isPublicCustomerBooking ? 'high' : 'medium'
       }
 
       const msgParts = [`${by} scheduled ${customer} for ${vehicleBit} (${when}).`]

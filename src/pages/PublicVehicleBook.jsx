@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/style.css'
-import { CalendarClock, Car, CheckCircle, Loader2, Lock, Package, X } from 'lucide-react'
-import { fetchVehiclePublicById } from '../lib/sanityData'
+import { CalendarClock, Car, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, Package, X } from 'lucide-react'
+import { fetchVehiclePublicById, fetchPublicBookingAlternatesByModel, fetchSimilarVehiclesPool } from '../lib/sanityData'
+import { getSimilarVehicles } from '../lib/similarVehicles'
 import { submitPublicViewingBooking } from '../lib/publicViewingBooking'
 import {
   sanitizeCustomerEmail,
@@ -55,6 +56,9 @@ export function PublicVehicleBook() {
   const [hpCompany, setHpCompany] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [bookedOk, setBookedOk] = useState(false)
+  const [similar, setSimilar] = useState([])
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const carouselRef = useRef(null)
 
   const todayStart = useMemo(() => startOfLocalDay(new Date()), [modalOpen])
   const maxDay = useMemo(() => {
@@ -101,6 +105,40 @@ export function PublicVehicleBook() {
       return null
     })
   }, [selectedDate])
+
+  useEffect(() => {
+    if (!vehicle?.id || !vehicle.brand || !vehicle.model) {
+      setSimilar([])
+      setSimilarLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setSimilarLoading(true)
+      try {
+        let rows = await fetchPublicBookingAlternatesByModel(vehicle.id, vehicle.brand, vehicle.model, 20)
+        if (!cancelled && rows.length === 0) {
+          const pool = await fetchSimilarVehiclesPool(vehicle.id)
+          if (!cancelled) rows = getSimilarVehicles(vehicle, pool, 15)
+        }
+        if (!cancelled) setSimilar(rows || [])
+      } catch {
+        if (!cancelled) setSimilar([])
+      } finally {
+        if (!cancelled) setSimilarLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [vehicle])
+
+  const scrollCarousel = useCallback((direction) => {
+    const el = carouselRef.current
+    if (!el) return
+    const w = Math.min(el.clientWidth * 0.8, 260)
+    el.scrollBy({ left: direction * w, behavior: 'smooth' })
+  }, [])
 
   const isSold = vehicle?.sold
   const isReserved = vehicle?.reserved && !vehicle?.sold
@@ -313,7 +351,7 @@ export function PublicVehicleBook() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3 text-sm mb-8">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3 text-sm mb-4">
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">About this vehicle</p>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-zinc-300">
             {vehicle.model_year != null && vehicle.model_year !== '' && (
@@ -348,6 +386,89 @@ export function PublicVehicleBook() {
             </div>
           )}
         </div>
+
+        {(similarLoading || similar.length > 0) && (
+          <section className="mt-6 mb-2" aria-labelledby="similar-models-heading">
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div className="min-w-0">
+                <h2 id="similar-models-heading" className="text-sm font-semibold text-white tracking-tight">
+                  More available {vehicle.brand} {vehicle.model}
+                </h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Tap a car to pick another slot · same model lineup</p>
+              </div>
+              {similar.length > 1 && !similarLoading ? (
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => scrollCarousel(-1)}
+                    className="p-2 rounded-lg border border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+                    aria-label="Previous cars"
+                  >
+                    <ChevronLeft className="w-4 h-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollCarousel(1)}
+                    className="p-2 rounded-lg border border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+                    aria-label="Next cars"
+                  >
+                    <ChevronRight className="w-4 h-4" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            {similarLoading ? (
+              <div className="flex gap-3 overflow-hidden pb-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-[9.25rem] w-[11rem] shrink-0 rounded-xl bg-zinc-800/90 animate-pulse border border-zinc-800" />
+                ))}
+              </div>
+            ) : (
+              <div
+                ref={carouselRef}
+                className="flex gap-3 overflow-x-auto pb-2 scroll-smooth scrollbar-hide snap-x snap-mandatory -mx-1 px-1"
+              >
+                {similar.map((s) => {
+                  const img = s.images?.[0]?.url
+                  const label = `${s.brand} ${s.model}`
+                  const sub =
+                    [
+                      s.model_year != null && s.model_year !== '' ? String(s.model_year) : null,
+                      s.mileage != null ? `${Number(s.mileage).toLocaleString()} mi` : null,
+                      s.stock_id ? `#${s.stock_id}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || 'View & book'
+
+                  return (
+                    <Link
+                      key={s.id}
+                      to={`/book/vehicle/${encodeURIComponent(s.id)}`}
+                      className="group shrink-0 w-[11rem] snap-start rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/50 hover:border-sky-500/40 hover:bg-zinc-900 transition shadow-sm flex flex-col"
+                    >
+                      <div className="aspect-[4/3] bg-zinc-950 relative overflow-hidden">
+                        <LazyVehicleImage
+                          src={img}
+                          alt={label}
+                          className="absolute inset-0 w-full h-full"
+                          imgClassName="object-cover transition group-hover:scale-[1.02]"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute bottom-2 left-2 right-2">
+                          <p className="text-[11px] font-semibold text-white leading-snug line-clamp-2">{label}</p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</p>
+                        </div>
+                      </div>
+                      <div className="px-2.5 py-2 border-t border-zinc-800/80 flex items-center justify-center">
+                        <span className="text-[11px] font-medium text-sky-400 group-hover:text-sky-300">Book this one</span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       <Footer />
