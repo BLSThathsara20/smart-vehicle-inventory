@@ -213,9 +213,9 @@ export function PublicFind() {
   const hasNext = page < totalPages
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-slate-950 text-white">
-      <header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-3">
+    <div className="min-h-[100dvh] min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-slate-950 text-white overflow-x-hidden public-customer-flow">
+      <header className="sticky top-0 z-30 safe-area-header border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-3 sm:py-4 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Sparkles className="w-6 h-6 text-amber-400 shrink-0" />
             <div>
@@ -238,7 +238,7 @@ export function PublicFind() {
             <button
               type="button"
               onClick={() => setQrOpen(true)}
-              className="p-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
+              className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 touch-manipulation"
               aria-label="Show QR code"
             >
               <QrCode className="w-5 h-5" />
@@ -246,14 +246,14 @@ export function PublicFind() {
             {signedInPublic ? (
               <Link
                 to="/app"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-sm font-semibold"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-sm font-semibold touch-manipulation"
               >
                 {canStaffInventory ? 'Open staff app' : 'Staff account'}
               </Link>
             ) : (
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold touch-manipulation"
               >
                 <LogIn className="w-4 h-4" />
                 Staff login
@@ -306,7 +306,7 @@ export function PublicFind() {
         </div>
       )}
 
-      <main className="max-w-6xl mx-auto px-4 pt-8 pb-16">
+      <main className="max-w-6xl mx-auto px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 pb-4">
         <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 md:p-8 mb-8">
           <p className="text-xs font-semibold text-amber-500/90 uppercase tracking-widest mb-1">
             Find your next vehicle
@@ -324,13 +324,13 @@ export function PublicFind() {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="Keyword (make, model, location…)"
-                className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-zinc-950/80 border border-zinc-700 text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500/50"
+                className="w-full pl-12 pr-4 py-4 min-h-[52px] rounded-xl bg-zinc-950/80 border border-zinc-700 text-base text-white placeholder-zinc-500 focus:ring-2 focus:ring-amber-500/50 touch-manipulation"
               />
             </div>
             <button
               type="button"
               onClick={() => setCameraOpen(true)}
-              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold"
+              className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 min-h-[52px] px-5 py-4 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-500 text-zinc-950 font-semibold text-base touch-manipulation sm:text-sm sm:py-3.5"
               aria-label="Scan plate"
             >
               <Camera className="w-5 h-5" />
@@ -345,7 +345,7 @@ export function PublicFind() {
               aria-expanded={advancedFiltersOpen}
               aria-controls="advanced-filters-panel"
               onClick={() => setAdvancedFiltersOpen((o) => !o)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition"
+              className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-zinc-800/50 transition touch-manipulation min-h-[52px]"
             >
               <span className="text-sm font-medium text-zinc-200">
                 Filtering options{' '}
@@ -382,7 +382,7 @@ export function PublicFind() {
                         value={stockId}
                         onChange={(e) => setStockId(e.target.value)}
                         placeholder="e.g. AGL…"
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40"
+                        className="w-full px-4 py-4 min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 text-base text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 touch-manipulation"
                       />
                     </div>
                     <div>
@@ -391,7 +391,7 @@ export function PublicFind() {
                         value={vin}
                         onChange={(e) => setVin(e.target.value)}
                         placeholder="Chassis number"
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 font-mono text-sm"
+                        className="w-full px-4 py-4 min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 text-base text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 font-mono touch-manipulation"
                       />
                     </div>
                     <div>
@@ -400,7 +400,7 @@ export function PublicFind() {
                         value={plate}
                         onChange={(e) => setPlate(e.target.value.toUpperCase())}
                         placeholder="Registration"
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 uppercase"
+                        className="w-full px-4 py-4 min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 text-base text-white placeholder-zinc-600 focus:ring-2 focus:ring-amber-500/40 uppercase touch-manipulation"
                       />
                     </div>
                   </div>
@@ -411,7 +411,7 @@ export function PublicFind() {
                       <select
                         value={brandFilter}
                         onChange={(e) => setBrandFilter(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40"
+                        className="w-full px-4 py-4 min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 text-base text-white focus:ring-2 focus:ring-amber-500/40 touch-manipulation"
                       >
                         <option value="">All makes</option>
                         {brands.map((b) => (
@@ -427,7 +427,7 @@ export function PublicFind() {
                         value={modelFilter}
                         onChange={(e) => setModelFilter(e.target.value)}
                         disabled={!brandFilter}
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-white focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                        className="w-full px-4 py-4 min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 text-base text-white focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50 touch-manipulation"
                       >
                         <option value="">All models</option>
                         {models.map((m) => (
@@ -516,7 +516,7 @@ export function PublicFind() {
                     type="button"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={!hasPrev}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 min-h-[48px] px-5 rounded-xl bg-zinc-800/80 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 touch-manipulation"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     Prev
@@ -532,7 +532,7 @@ export function PublicFind() {
                           key={p}
                           type="button"
                           onClick={() => setPage(p)}
-                          className={`min-w-[2.25rem] h-9 px-2 rounded-lg text-sm font-medium transition ${
+                          className={`min-w-[2.75rem] min-h-11 px-3 rounded-xl text-base sm:text-sm font-medium transition touch-manipulation ${
                             page === p
                               ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400'
                               : 'bg-zinc-800/60 border border-zinc-700 text-zinc-400 hover:text-white'
@@ -547,7 +547,7 @@ export function PublicFind() {
                     type="button"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={!hasNext}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 min-h-[48px] px-5 rounded-xl bg-zinc-800/80 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 touch-manipulation"
                   >
                     Next
                     <ChevronRight className="w-4 h-4" />

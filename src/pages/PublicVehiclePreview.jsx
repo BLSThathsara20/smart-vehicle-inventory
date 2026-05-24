@@ -79,19 +79,22 @@ export function PublicVehiclePreview() {
 
   if (notFound || !vehicle) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-        <header className="border-b border-zinc-800 px-4 py-4">
-          <Link to="/find" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white">
-            <ArrowLeft className="w-4 h-4" /> Back to stock
+      <div className="min-h-screen bg-zinc-950 text-white flex flex-col overflow-x-hidden public-customer-flow">
+        <header className="border-b border-zinc-800 safe-area-header px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+          <Link
+            to="/find"
+            className="inline-flex items-center gap-2 min-h-12 py-3 text-base text-zinc-400 hover:text-white touch-manipulation"
+          >
+            <ArrowLeft className="w-5 h-5" /> Back to stock
           </Link>
         </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] text-center pb-8">
           <Car className="w-14 h-14 text-zinc-600 mb-4" />
           <p className="text-lg font-medium text-zinc-300">Vehicle not found</p>
           <p className="text-zinc-500 text-sm mt-1">It may have been removed or the link is incorrect.</p>
           <Link
             to="/find"
-            className="mt-6 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
+            className="mt-8 inline-flex items-center justify-center min-h-[48px] px-6 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-500 text-zinc-950 font-semibold text-base touch-manipulation"
           >
             Browse stock
           </Link>
@@ -107,44 +110,47 @@ export function PublicVehiclePreview() {
   const listedPriceLabel = formatPublicSellingPriceGbp(vehicle.selling_price)
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <header className="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <Link to="/find" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Stock</span>
+    <div className="min-h-[100dvh] min-h-screen bg-zinc-950 text-white flex flex-col overflow-x-hidden public-customer-flow">
+      <header className="sticky top-0 z-20 safe-area-header border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md">
+        <div className="max-w-3xl mx-auto px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-2 sm:py-3 flex items-center justify-between gap-3 min-h-[52px]">
+          <Link
+            to="/find"
+            className="inline-flex items-center gap-2 text-base sm:text-sm text-zinc-400 hover:text-white shrink-0 min-h-[44px] px-1 -mx-1 touch-manipulation rounded-lg active:bg-zinc-800/60"
+          >
+            <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4 shrink-0" />
+            Browse stock
           </Link>
           {signedInPublic ? (
             <Link
               to="/app"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-600 text-sm text-zinc-100 hover:bg-zinc-700"
+              className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-zinc-800 border border-zinc-600 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 touch-manipulation"
             >
               Staff account
             </Link>
           ) : (
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-700"
+              className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm font-semibold text-zinc-200 hover:bg-zinc-700 touch-manipulation"
             >
-              <LogIn className="w-4 h-4" />
-              Staff sign in
+              <LogIn className="w-5 h-5 shrink-0" />
+              Sign in
             </Link>
           )}
         </div>
       </header>
 
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-10">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 pb-6">
         {!vehicle.sold && !(vehicle.reserved && !vehicle.sold) && (
-          <div className="mb-6 rounded-2xl border border-sky-500/35 bg-gradient-to-br from-sky-500/10 to-zinc-900/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div className="mb-6 rounded-2xl border border-sky-500/35 bg-gradient-to-br from-sky-500/10 to-zinc-900/50 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white">Want to see this car?</p>
-              <p className="text-xs text-zinc-400 mt-1">Pick a day and a rough time — we&apos;ll confirm with you.</p>
+              <p className="text-[15px] sm:text-xs text-zinc-400 mt-1.5 leading-relaxed">Pick a day and a rough time — we&apos;ll confirm with you.</p>
             </div>
             <Link
               to={`/book/vehicle/${encodeURIComponent(id)}`}
-              className="mt-3 sm:mt-0 shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold transition"
+              className="mt-4 sm:mt-0 w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 min-h-[52px] px-5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white text-base font-semibold transition touch-manipulation"
             >
-              <CalendarPlus className="w-4 h-4" />
+              <CalendarPlus className="w-5 h-5" />
               Book a viewing
             </Link>
           </div>
@@ -284,7 +290,7 @@ export function PublicVehiclePreview() {
               </p>
               <Link
                 to="/app"
-                className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 font-semibold text-sm"
+                className="inline-flex items-center justify-center gap-2 mt-4 min-h-[48px] px-5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 font-semibold text-base sm:text-sm touch-manipulation"
               >
                 Staff portal
               </Link>
@@ -297,9 +303,9 @@ export function PublicVehiclePreview() {
               </p>
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 mt-3 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
+                className="inline-flex items-center justify-center gap-2 mt-4 min-h-[48px] px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-base sm:text-sm touch-manipulation"
               >
-                <LogIn className="w-4 h-4" />
+                <LogIn className="w-5 h-5" />
                 Sign in for full details
               </Link>
             </>

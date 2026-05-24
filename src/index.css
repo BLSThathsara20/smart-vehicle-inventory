@@ -9,9 +9,23 @@
 	--color-primary-muted: rgba(245, 158, 11, 0.15);
 }
 
-/* Safe area for mobile bottom nav (notch/home indicator) */
+/* Safe inset only (e.g. fixed bottom nav) */
 .safe-area-pb {
-	padding-bottom: env(safe-area-inset-bottom, 0);
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Safe area + comfortable padding under home indicator */
+.pb-safe-public {
+	padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
+}
+
+.safe-area-header {
+	padding-top: env(safe-area-inset-top, 0px);
+}
+
+.smooth-ios-scroll {
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 }
 
 /* Toast animation */
@@ -86,4 +100,19 @@ html {
 }
 .customer-booking-calendar .rdp-disabled {
 	opacity: 0.28;
+}
+
+@media (max-width: 639px) {
+	.customer-booking-calendar .rdp-root {
+		--rdp-day-height: 2.85rem;
+		--rdp-day-width: 2.85rem;
+		font-size: 0.9375rem;
+	}
+}
+
+/* Public-facing pages — avoid accidental horizontal drift on small screens */
+.public-customer-flow {
+	overflow-x: hidden;
+	min-height: 100dvh;
+	min-height: 100vh;
 }

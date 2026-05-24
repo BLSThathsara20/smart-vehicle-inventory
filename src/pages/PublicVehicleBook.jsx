@@ -242,7 +242,7 @@ export function PublicVehicleBook() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950">
+      <div className="min-h-[100dvh] min-h-screen bg-zinc-950 overflow-x-hidden public-customer-flow">
         <LoadingState message="Loading vehicle…" variant="embedded" className="py-24" />
       </div>
     )
@@ -250,19 +250,22 @@ export function PublicVehicleBook() {
 
   if (notFound || !vehicle) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-        <header className="border-b border-zinc-800 px-4 py-4">
-          <Link to="/find" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm">
+      <div className="min-h-[100dvh] min-h-screen bg-zinc-950 text-white flex flex-col overflow-x-hidden public-customer-flow">
+        <header className="border-b border-zinc-800 px-4 safe-area-header shrink-0">
+          <Link
+            to="/find"
+            className="inline-flex items-center gap-2 min-h-12 py-3 text-base text-zinc-400 hover:text-white touch-manipulation"
+          >
             ← Back to stock
           </Link>
         </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center pb-24">
+        <div className="flex-1 flex flex-col items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] text-center pb-12">
           <Car className="w-14 h-14 text-zinc-600 mb-4" />
           <p className="text-lg font-medium text-zinc-300">Vehicle not found</p>
           <p className="text-zinc-500 text-sm mt-1 max-w-md">The link may be wrong or this listing may have been removed.</p>
           <Link
             to="/find"
-            className="mt-6 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
+            className="mt-8 inline-flex items-center justify-center min-h-[48px] px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-base touch-manipulation"
           >
             Browse stock
           </Link>
@@ -276,27 +279,33 @@ export function PublicVehicleBook() {
   const listedPriceLabel = formatPublicSellingPriceGbp(vehicle.selling_price)
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col public-book-page">
-      <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <Link to={`/find/vehicle/${encodeURIComponent(vehicle.id)}`} className="text-sm text-zinc-400 hover:text-white shrink-0">
+    <div className="min-h-[100dvh] min-h-screen bg-zinc-950 text-white flex flex-col overflow-x-hidden public-customer-flow public-book-page">
+      <header className="sticky top-0 z-40 safe-area-header border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md">
+        <div className="max-w-lg mx-auto px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] py-2 sm:py-3 flex items-center justify-between gap-3 min-h-[48px]">
+          <Link
+            to={`/find/vehicle/${encodeURIComponent(vehicle.id)}`}
+            className="text-sm sm:text-base text-zinc-400 hover:text-white shrink-0 min-h-[44px] inline-flex items-center px-1 -mx-1 touch-manipulation rounded-lg active:bg-zinc-800/80"
+          >
             ← Vehicle summary
           </Link>
-          <Link to="/find" className="text-xs text-zinc-500 hover:text-zinc-300">
+          <Link
+            to="/find"
+            className="text-sm text-zinc-500 hover:text-zinc-300 min-h-[44px] inline-flex items-center px-2 touch-manipulation rounded-lg active:bg-zinc-800/60"
+          >
             All stock
           </Link>
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto w-full px-4 pt-5 pb-4 flex-1 flex flex-col gap-4">
+      <div className="max-w-lg mx-auto w-full px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-5 pb-2 flex-1 flex flex-col gap-4">
         <div className="rounded-2xl border border-sky-500/35 bg-gradient-to-br from-sky-500/10 to-zinc-900/60 p-4 sm:p-5 shadow-lg">
           <div className="flex items-start gap-3">
             <div className="w-11 h-11 rounded-xl bg-sky-500/20 flex items-center justify-center shrink-0 border border-sky-500/30">
               <CalendarClock className="w-5 h-5 text-sky-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg font-bold text-white leading-tight">Book a viewing</h1>
-              <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+              <h1 className="text-xl sm:text-lg font-bold text-white leading-tight">Book a viewing</h1>
+              <p className="text-base sm:text-sm text-zinc-400 mt-2 sm:mt-1 leading-relaxed">
                 Mon–Sat <span className="text-zinc-300">10am–7pm</span>, Sun{' '}
                 <span className="text-zinc-300">12:30pm–3:30pm</span> (half-hour slots). Times shown in your device&apos;s
                 timezone; we&apos;ll confirm with you before you arrive.
@@ -326,7 +335,7 @@ export function PublicVehicleBook() {
             type="button"
             disabled={!canBook || !BOOKING_FN_CONFIGURED}
             onClick={openModal}
-            className="mt-5 w-full py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition shadow-md shadow-sky-900/40"
+            className="mt-5 w-full min-h-[52px] py-4 sm:py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base transition shadow-md shadow-sky-900/40 touch-manipulation"
           >
             {canBook ? (BOOKING_FN_CONFIGURED ? 'Choose date & time' : 'Online booking unavailable') : 'Booking unavailable'}
           </button>
@@ -459,28 +468,30 @@ export function PublicVehicleBook() {
           <section className="mt-6 mb-2" aria-labelledby="similar-models-heading">
             <div className="flex items-end justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <h2 id="similar-models-heading" className="text-sm font-semibold text-white tracking-tight">
+                <h2 id="similar-models-heading" className="text-base sm:text-sm font-semibold text-white tracking-tight">
                   More available {vehicle.brand} {vehicle.model}
                 </h2>
-                <p className="text-xs text-zinc-500 mt-0.5">Tap a car to pick another slot · same model lineup</p>
+                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                  Tap a car to choose another viewing · same model on the yard
+                </p>
               </div>
               {carouselOverflows && !similarLoading ? (
                 <div className="flex gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => scrollCarousel(-1)}
-                    className="p-2 rounded-lg border border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+                    className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/80 text-zinc-300 active:bg-zinc-800 hover:text-white transition touch-manipulation"
                     aria-label="Previous cars"
                   >
-                    <ChevronLeft className="w-4 h-4" aria-hidden />
+                    <ChevronLeft className="w-5 h-5" aria-hidden />
                   </button>
                   <button
                     type="button"
                     onClick={() => scrollCarousel(1)}
-                    className="p-2 rounded-lg border border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
+                    className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/80 text-zinc-300 active:bg-zinc-800 hover:text-white transition touch-manipulation"
                     aria-label="Next cars"
                   >
-                    <ChevronRight className="w-4 h-4" aria-hidden />
+                    <ChevronRight className="w-5 h-5" aria-hidden />
                   </button>
                 </div>
               ) : null}
@@ -494,7 +505,7 @@ export function PublicVehicleBook() {
             ) : (
               <div
                 ref={carouselRef}
-                className="flex gap-3 overflow-x-auto pb-2 scroll-smooth scrollbar-hide snap-x snap-mandatory -mx-1 px-1"
+                className="flex gap-3 overflow-x-auto pb-3 pt-1 scroll-smooth scrollbar-hide snap-x snap-mandatory -mx-1 px-[max(0.25rem,env(safe-area-inset-left))] touch-pan-x"
               >
                 {similar.map((s) => {
                   const img = s.images?.[0]?.url
@@ -512,7 +523,7 @@ export function PublicVehicleBook() {
                     <Link
                       key={s.id}
                       to={`/book/vehicle/${encodeURIComponent(s.id)}`}
-                      className="group shrink-0 w-[11rem] snap-start rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/50 hover:border-sky-500/40 hover:bg-zinc-900 transition shadow-sm flex flex-col"
+                      className="group shrink-0 w-[min(11rem,calc(100vw-2.5rem))] min-w-[10.5rem] snap-start rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/50 active:border-sky-500/45 hover:border-sky-500/40 hover:bg-zinc-900 transition shadow-sm flex flex-col touch-manipulation"
                     >
                       <div className="aspect-[4/3] bg-zinc-950 relative overflow-hidden">
                         <LazyVehicleImage
@@ -523,12 +534,14 @@ export function PublicVehicleBook() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                         <div className="absolute bottom-2 left-2 right-2">
-                          <p className="text-[11px] font-semibold text-white leading-snug line-clamp-2">{label}</p>
-                          <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</p>
+                          <p className="text-[12px] font-semibold text-white leading-snug line-clamp-2">{label}</p>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">{sub}</p>
                         </div>
                       </div>
-                      <div className="px-2.5 py-2 border-t border-zinc-800/80 flex items-center justify-center">
-                        <span className="text-[11px] font-medium text-sky-400 group-hover:text-sky-300">Book this one</span>
+                      <div className="px-2.5 py-3 border-t border-zinc-800/80 flex items-center justify-center min-h-[44px]">
+                        <span className="text-xs font-semibold text-sky-400 group-hover:text-sky-300 group-active:text-sky-200">
+                          Book this one
+                        </span>
                       </div>
                     </Link>
                   )
@@ -543,7 +556,7 @@ export function PublicVehicleBook() {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm touch-manipulation"
           role="presentation"
           onClick={closeModal}
         >
@@ -551,31 +564,31 @@ export function PublicVehicleBook() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="book-modal-title"
-            className="w-full sm:max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col rounded-t-2xl sm:rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+            className="w-full sm:max-w-md max-h-[min(94dvh,880px)] sm:max-h-[90vh] overflow-hidden flex flex-col rounded-t-[1.35rem] sm:rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl"
             onClick={(ev) => ev.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-800 shrink-0">
-              <h2 id="book-modal-title" className="text-base font-semibold text-white">
+            <div className="flex items-center justify-between gap-2 pl-5 pr-2 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3 sm:py-3 border-b border-zinc-800 shrink-0">
+              <h2 id="book-modal-title" className="text-lg sm:text-base font-semibold text-white">
                 Request a viewing
               </h2>
               <button
                 type="button"
                 onClick={closeModal}
-                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-white active:bg-zinc-700 touch-manipulation"
                 aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6 sm:w-5 sm:h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col relative">
-              <div className="p-4 space-y-4 customer-booking-calendar">
-                <p className="text-xs text-zinc-500 leading-relaxed">
+            <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-hidden flex flex-col relative">
+              <div className="p-4 pb-6 space-y-4 customer-booking-calendar flex-1 min-h-0 overflow-y-auto smooth-ios-scroll px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+                <p className="text-sm text-zinc-500 leading-relaxed">
                   Mon–Sat use full-day hours below; Sundays use shortened hours. Slots are every 30 minutes during
                   opening hours.
                 </p>
 
-                <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
+                <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2 sm:p-2 overflow-x-auto">
                   <DayPicker
                     mode="single"
                     selected={selectedDate}
@@ -591,19 +604,19 @@ export function PublicVehicleBook() {
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Time</p>
+                  <p className="text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Time</p>
                   {!selectedDate ? (
-                    <p className="text-xs text-zinc-500">Pick a date above to load available times.</p>
+                    <p className="text-sm text-zinc-500 leading-relaxed">Pick a date above to load available times.</p>
                   ) : slotsForDay.length === 0 ? (
-                    <p className="text-xs text-zinc-500">That day isn’t available.</p>
+                    <p className="text-sm text-zinc-500">That day isn’t available.</p>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-[min(52vh,20rem)] overflow-y-auto pr-1 smooth-ios-scroll">
                       {slotsForDay.map((s) => (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => setSelectedSlotId(s.id)}
-                          className={`rounded-lg border px-1.5 py-2 text-center text-xs font-medium transition ${
+                          className={`rounded-xl border px-2 py-3 min-h-[48px] text-center text-sm font-medium transition touch-manipulation ${
                             selectedSlotId === s.id
                               ? 'border-sky-500 bg-sky-500/15 text-sky-200'
                               : 'border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600'
@@ -617,44 +630,53 @@ export function PublicVehicleBook() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Your name *</label>
+                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    Your name *
+                  </label>
                   <input
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     maxLength={130}
                     autoComplete="name"
-                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    enterKeyHint="next"
+                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
                     placeholder="e.g. Sam Taylor"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Phone *</label>
+                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    Phone *
+                  </label>
                   <input
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     maxLength={45}
                     autoComplete="tel"
                     inputMode="tel"
-                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    enterKeyHint="next"
+                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
                     placeholder="So we can confirm your visit"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Email (optional)</label>
+                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    Email (optional)
+                  </label>
                   <input
                     type="email"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
                     maxLength={170}
                     autoComplete="email"
-                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    enterKeyHint="next"
+                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
                     placeholder="Optional"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
                     Message (optional)
                   </label>
                   <textarea
@@ -662,7 +684,7 @@ export function PublicVehicleBook() {
                     onChange={(e) => setNotes(e.target.value)}
                     maxLength={1250}
                     rows={3}
-                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y min-h-[4.5rem]"
+                    className="mt-2 w-full rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600 resize-y min-h-[5rem] leading-snug"
                     placeholder="Anything we should know (no links required)"
                   />
                 </div>
@@ -680,18 +702,18 @@ export function PublicVehicleBook() {
                 </div>
               </div>
 
-              <div className="border-t border-zinc-800 p-4 flex gap-2 shrink-0 bg-zinc-900/90">
+              <div className="border-t border-zinc-800 flex gap-3 shrink-0 bg-zinc-900/95 px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 py-3 rounded-xl border border-zinc-600 text-zinc-300 text-sm font-medium hover:bg-zinc-800"
+                  className="flex-1 min-h-[52px] py-3.5 rounded-xl border border-zinc-600 text-zinc-300 text-base font-semibold hover:bg-zinc-800 touch-manipulation"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-sm font-semibold inline-flex items-center justify-center gap-2"
+                  className="flex-1 min-h-[52px] py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white text-base font-semibold inline-flex items-center justify-center gap-2 touch-manipulation"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Send request
