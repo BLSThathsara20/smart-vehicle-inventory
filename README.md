@@ -36,7 +36,7 @@ Copy `.env.example` to `.env` and set:
 npm run dev
 ```
 
-The first Firebase sign-in creates the initial **`userProfile`** with **super_admin**. Additional **Google** sign-ins **without** a profile queue a Sanity **`staffJoinRequest`** until someone with **Users** access approves them on the **Users** page (notifications surface pending requests too). **Email/password** sign-ups still get an immediate **guest** profile.
+The first Firebase sign-in creates the initial **`userProfile`** with **super_admin**. Additional **Google** sign-ins **without** a profile queue a Sanity **`staffJoinRequest`** until someone with **Users** access approves them on the **Users** page (notifications surface pending requests too). **Email/password** sign-ups still get an immediate **guest** profile with **no permissions**: they use public **Browse stock** (`/find`) until an administrator assigns a role (internal **`/vehicle/:id`** and **`/app/*`** pages remain permission-guarded).
 
 ### Sanity `staffJoinRequest` (Google onboarding)
 

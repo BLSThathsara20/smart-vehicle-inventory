@@ -11,7 +11,8 @@ import {
 } from "./pickupVerification";
 
 /** Permission bundles for seeded / ensured built-in roles (single source of truth). */
-const PERMS_GUEST = ["perm-inventory-view"];
+/** Assigned to signed-in accounts before an admin assigns a role — no dealer portal / vehicle record access */
+const PERMS_GUEST = [];
 const PERMS_HELPER = [
 	"perm-inventory-view",
 	"perm-search-view",
@@ -41,14 +42,15 @@ const PERMS_MANAGER = [
 	"perm-settings-view",
 ];
 
-/** Keeps built-in guest role in sync (inventory view only). Safe to call on every bootstrap. */
+/** Keeps built-in guest role in sync (no dealer permissions until an admin assigns a role). */
 async function syncBuiltinGuestRole() {
 	if (!sanity) return;
 	await sanity.createOrReplace({
 		_id: "role-guest",
 		_type: "role",
 		name: "guest",
-		description: "Default for new sign-ins: view inventory only (no edits)",
+		description:
+			"Default stub before role assignment — public Browse stock only; no internal vehicle records",
 		is_system: true,
 		permission_ids: PERMS_GUEST,
 	});
@@ -251,7 +253,8 @@ export async function ensureBootstrap() {
 			{
 				_id: "role-guest",
 				name: "guest",
-				description: "Default for new sign-ins: view inventory only (no edits)",
+				description:
+					"Default stub before role assignment — use public Browse stock; no internal inventory or workflows",
 				is_system: true,
 				permission_ids: PERMS_GUEST,
 			},

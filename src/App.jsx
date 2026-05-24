@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { NotificationToast } from "./components/NotificationToast";
@@ -28,7 +28,10 @@ import { CustomerPickup } from "./pages/CustomerPickup";
 import { Services } from "./pages/Services";
 import { Privacy } from "./pages/Privacy";
 import { ResetPassword } from "./pages/ResetPassword";
-import { RequirePermission } from "./components/RequirePermission";
+import {
+	RequirePermission,
+	VEHICLE_INTERNAL_DETAIL_PERM_CODES,
+} from "./components/RequirePermission";
 import { hasFirebaseConfig } from "./lib/firebase";
 import { hasSanityConfig } from "./lib/sanity";
 import { LoadingState } from "./components/LoadingState";
@@ -96,7 +99,7 @@ function ProtectedRoute({ children }) {
 }
 
 function LoginRedirect({ children }) {
-	const { user, loading, loadingStage, configOk } = useAuth();
+	const { user, profile, loading, loadingStage, configOk } = useAuth();
 	if (!hasFirebaseConfig() || !hasSanityConfig) return <ConfigMissing />;
 	if (loading) {
 		return (
@@ -107,12 +110,17 @@ function LoginRedirect({ children }) {
 			/>
 		);
 	}
-	if (user) return <Navigate to="/app" replace />;
+	if (user) {
+		const perms = profile?.permissions;
+		if (perms == null) return <Navigate to="/app" replace />;
+		const hasPortalAccess = Array.isArray(perms) && perms.length > 0;
+		return <Navigate to={hasPortalAccess ? "/app" : "/find"} replace />;
+	}
 	return children;
 }
 
 function HomeRedirect() {
-	const { user, loading, loadingStage } = useAuth();
+	const { user, profile, loading, loadingStage } = useAuth();
 	if (!hasFirebaseConfig() || !hasSanityConfig) return <ConfigMissing />;
 	if (loading) {
 		return (
@@ -123,7 +131,11 @@ function HomeRedirect() {
 			/>
 		);
 	}
-	return <Navigate to={user ? "/app" : "/find"} replace />;
+	if (!user) return <Navigate to="/find" replace />;
+	const perms = profile?.permissions;
+	if (perms == null) return <Navigate to="/app" replace />;
+	const hasPortalAccess = Array.isArray(perms) && perms.length > 0;
+	return <Navigate to={hasPortalAccess ? "/app" : "/find"} replace />;
 }
 
 /** Home: overview for search:view; otherwise jump to inventory when allowed. */
@@ -136,10 +148,19 @@ function AppHomeIndex() {
 		return <Navigate to="/app/inventory" replace />;
 	}
 	return (
-		<div className="p-4 text-zinc-400">
-			<p>No dashboard available for your account.</p>
-			<p className="text-sm text-zinc-500 mt-2">
-				Ask an administrator to assign a role.
+		<div className="p-4 text-zinc-400 max-w-md">
+			<p className="text-zinc-300 font-medium">No dealer portal access yet</p>
+			<p className="text-sm text-zinc-500 mt-2 leading-relaxed">
+				Public listings are always available below. Ask an administrator to assign a role for inventory,
+				analytics, and internal vehicle records.
+			</p>
+			<p className="mt-6">
+				<Link
+					to="/find"
+					className="inline-flex px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold"
+				>
+					Browse stock
+				</Link>
 			</p>
 		</div>
 	);
@@ -162,7 +183,12 @@ function AppRoutes() {
 				path="/vehicle/:id"
 				element={
 					<ProtectedRoute>
-						<VehicleDetail />
+						<RequirePermission
+							anyOf={VEHICLE_INTERNAL_DETAIL_PERM_CODES}
+							redirectTo="/find"
+						>
+							<VehicleDetail />
+						</RequirePermission>
 					</ProtectedRoute>
 				}
 			/>
