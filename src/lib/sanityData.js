@@ -811,6 +811,8 @@ export async function fetchVehiclePublicById(id) {
 			gear,
 			vin,
 			plate_no,
+			selling_price,
+			features,
 			sold,
 			reserved,
 			vehicle_status,
@@ -826,6 +828,11 @@ export async function fetchVehiclePublicById(id) {
 			sort_order: img.sortOrder ?? i,
 		}))
 		.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+	const feats =
+		doc.features != null && typeof doc.features === "object" && !Array.isArray(doc.features)
+			? doc.features
+			: {};
+
 	return {
 		id: doc._id,
 		stock_id: doc.stock_id,
@@ -841,6 +848,8 @@ export async function fetchVehiclePublicById(id) {
 		gear: doc.gear,
 		vin: doc.vin,
 		plate_no: doc.plate_no,
+		selling_price: doc.selling_price,
+		features: feats,
 		sold: doc.sold === true,
 		reserved: doc.reserved === true,
 		vehicle_status: doc.vehicle_status,

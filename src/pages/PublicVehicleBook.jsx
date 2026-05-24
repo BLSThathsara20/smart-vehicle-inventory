@@ -12,6 +12,7 @@ import {
   sanitizeCustomerPlainText,
 } from '../lib/sanitizeCustomerInput'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { PublicVehicleFeaturesChips } from '../components/PublicVehicleFeaturesChips'
 import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
 import { useNotification } from '../context/NotificationContext'
@@ -19,6 +20,7 @@ import {
   publicBookingTimeSlotsForDay,
   isPublicBookingDaySelectable,
 } from '../lib/publicBookingHours'
+import { formatPublicSellingPriceGbp } from '../lib/publicVehicleDisplay'
 
 const BOOKING_FN_CONFIGURED = Boolean(String(import.meta.env.VITE_PUBLIC_VIEWING_BOOKING_URL || '').trim())
 
@@ -247,6 +249,7 @@ export function PublicVehicleBook() {
   }
 
   const primaryImage = vehicle.images?.[0]?.url
+  const listedPriceLabel = formatPublicSellingPriceGbp(vehicle.selling_price)
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col public-book-page">
@@ -344,9 +347,14 @@ export function PublicVehicleBook() {
               <p className="text-white font-semibold text-xl">
                 {vehicle.brand} {vehicle.model}
               </p>
-              {vehicle.stock_id != null && vehicle.stock_id !== '' && (
-                <p className="text-amber-400/95 font-mono text-sm mt-1">#{vehicle.stock_id}</p>
-              )}
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                {vehicle.stock_id != null && vehicle.stock_id !== '' && (
+                  <p className="text-amber-400/95 font-mono text-sm">#{vehicle.stock_id}</p>
+                )}
+                {listedPriceLabel ? (
+                  <p className="text-emerald-300 font-semibold text-base drop-shadow">{listedPriceLabel}</p>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -358,6 +366,41 @@ export function PublicVehicleBook() {
               <>
                 <dt className="text-zinc-500">Year</dt>
                 <dd>{vehicle.model_year}</dd>
+              </>
+            )}
+            {listedPriceLabel ? (
+              <>
+                <dt className="text-zinc-500">Price</dt>
+                <dd className="font-semibold text-emerald-300">{listedPriceLabel}</dd>
+              </>
+            ) : null}
+            {vehicle.mileage != null && (
+              <>
+                <dt className="text-zinc-500">Mileage</dt>
+                <dd>{Number(vehicle.mileage).toLocaleString()} miles</dd>
+              </>
+            )}
+            {vehicle.cc != null && vehicle.cc !== '' && (
+              <>
+                <dt className="text-zinc-500">Engine capacity</dt>
+                <dd>
+                  {typeof vehicle.cc === 'number'
+                    ? vehicle.cc.toLocaleString('en-GB')
+                    : String(vehicle.cc).trim()}{' '}
+                  cc
+                </dd>
+              </>
+            )}
+            {vehicle.fuel_type && (
+              <>
+                <dt className="text-zinc-500">Fuel</dt>
+                <dd>{vehicle.fuel_type}</dd>
+              </>
+            )}
+            {vehicle.gear && (
+              <>
+                <dt className="text-zinc-500">Gearbox</dt>
+                <dd>{vehicle.gear}</dd>
               </>
             )}
             {vehicle.body && (
@@ -372,13 +415,14 @@ export function PublicVehicleBook() {
                 <dd>{vehicle.color}</dd>
               </>
             )}
-            {vehicle.mileage != null && (
+            {vehicle.plate_no && String(vehicle.plate_no).trim() !== '' && (
               <>
-                <dt className="text-zinc-500">Mileage</dt>
-                <dd>{Number(vehicle.mileage).toLocaleString()} miles</dd>
+                <dt className="text-zinc-500">Number plate</dt>
+                <dd className="font-mono tracking-wide">{vehicle.plate_no}</dd>
               </>
             )}
           </dl>
+          <PublicVehicleFeaturesChips features={vehicle.features} />
           {vehicle.details && (
             <div className="pt-2 border-t border-zinc-800">
               <p className="text-zinc-500 text-xs uppercase mb-1">Notes</p>

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { fetchVehiclePublicById } from '../lib/sanityData'
 import { useAuth } from '../context/AuthContext'
+import { PublicVehicleFeaturesChips } from '../components/PublicVehicleFeaturesChips'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { formatPublicSellingPriceGbp } from '../lib/publicVehicleDisplay'
 import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
 import { ArrowLeft, Car, Lock, LogIn, Package, CheckCircle, CalendarPlus } from 'lucide-react'
@@ -102,6 +104,7 @@ export function PublicVehiclePreview() {
   const primaryImage = vehicle.images?.[0]?.url
   const isSold = vehicle.sold
   const isReserved = vehicle.reserved && !vehicle.sold
+  const listedPriceLabel = formatPublicSellingPriceGbp(vehicle.selling_price)
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
@@ -175,9 +178,14 @@ export function PublicVehiclePreview() {
               <p className="text-white font-semibold text-xl">
                 {vehicle.brand} {vehicle.model}
               </p>
-              {vehicle.stock_id != null && vehicle.stock_id !== '' && (
-                <p className="text-amber-400/95 font-mono text-sm mt-1">#{vehicle.stock_id}</p>
-              )}
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                {vehicle.stock_id != null && vehicle.stock_id !== '' && (
+                  <p className="text-amber-400/95 font-mono text-sm">#{vehicle.stock_id}</p>
+                )}
+                {listedPriceLabel ? (
+                  <p className="text-emerald-300 font-semibold text-base drop-shadow">{listedPriceLabel}</p>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -197,28 +205,27 @@ export function PublicVehiclePreview() {
                 <dd>{vehicle.model_year}</dd>
               </>
             )}
-            {vehicle.body && (
+            {listedPriceLabel ? (
               <>
-                <dt className="text-zinc-500">Body</dt>
-                <dd>{vehicle.body}</dd>
+                <dt className="text-zinc-500">Price</dt>
+                <dd className="font-semibold text-emerald-300">{listedPriceLabel}</dd>
               </>
-            )}
-            {vehicle.color && (
-              <>
-                <dt className="text-zinc-500">Colour</dt>
-                <dd>{vehicle.color}</dd>
-              </>
-            )}
+            ) : null}
             {vehicle.mileage != null && (
               <>
                 <dt className="text-zinc-500">Mileage</dt>
                 <dd>{Number(vehicle.mileage).toLocaleString()} miles</dd>
               </>
             )}
-            {vehicle.cc != null && (
+            {vehicle.cc != null && vehicle.cc !== '' && (
               <>
-                <dt className="text-zinc-500">Engine</dt>
-                <dd>{vehicle.cc} cc</dd>
+                <dt className="text-zinc-500">Engine capacity</dt>
+                <dd>
+                  {typeof vehicle.cc === 'number'
+                    ? vehicle.cc.toLocaleString('en-GB')
+                    : String(vehicle.cc).trim()}{' '}
+                  cc
+                </dd>
               </>
             )}
             {vehicle.fuel_type && (
@@ -233,10 +240,22 @@ export function PublicVehiclePreview() {
                 <dd>{vehicle.gear}</dd>
               </>
             )}
+            {vehicle.body && (
+              <>
+                <dt className="text-zinc-500">Body</dt>
+                <dd>{vehicle.body}</dd>
+              </>
+            )}
+            {vehicle.color && (
+              <>
+                <dt className="text-zinc-500">Colour</dt>
+                <dd>{vehicle.color}</dd>
+              </>
+            )}
             {vehicle.plate_no && String(vehicle.plate_no).trim() !== '' && (
               <>
-                <dt className="text-zinc-500">Plate</dt>
-                <dd className="font-mono">{vehicle.plate_no}</dd>
+                <dt className="text-zinc-500">Number plate</dt>
+                <dd className="font-mono tracking-wide">{vehicle.plate_no}</dd>
               </>
             )}
             {vehicle.vin && String(vehicle.vin).trim() !== '' && (
@@ -246,6 +265,7 @@ export function PublicVehiclePreview() {
               </>
             )}
           </dl>
+          <PublicVehicleFeaturesChips features={vehicle.features} />
           {vehicle.details && (
             <div className="pt-2 border-t border-zinc-800">
               <p className="text-zinc-500 text-xs uppercase mb-1">Notes</p>
@@ -259,8 +279,8 @@ export function PublicVehiclePreview() {
           {signedInPublic ? (
             <>
               <p className="text-zinc-500">
-                You&apos;re signed in. Full dealer pricing, reservations, and workflows appear once an administrator
-                approves your account and assigns a role.
+                You&apos;re signed in. Summary list price appears here too; reservations, workflows, and full dealership
+                data appear once an administrator approves your account and assigns a role.
               </p>
               <Link
                 to="/app"
@@ -272,7 +292,8 @@ export function PublicVehiclePreview() {
           ) : (
             <>
               <p className="text-zinc-500">
-                Pricing, reservations, and internal workflow are only visible after you sign in with a dealership account.
+                The listed guide price appears here for shoppers. Reservations, workflows, and full dealer tooling are only
+                available after you sign in with a dealership account.
               </p>
               <Link
                 to="/login"
