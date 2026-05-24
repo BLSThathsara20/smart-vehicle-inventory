@@ -60,7 +60,9 @@ export function PublicVehicleBook() {
   const [similar, setSimilar] = useState([])
   const [similarLoading, setSimilarLoading] = useState(false)
   const carouselRef = useRef(null)
+  const mainBookBtnRef = useRef(null)
   const [carouselOverflows, setCarouselOverflows] = useState(false)
+  const [fabBookVisible, setFabBookVisible] = useState(false)
 
   const todayStart = useMemo(() => startOfLocalDay(new Date()), [modalOpen])
   const maxDay = useMemo(() => {
@@ -170,6 +172,22 @@ export function PublicVehicleBook() {
   const isReserved = vehicle?.reserved && !vehicle?.sold
   const canBook = vehicle && !isSold && !isReserved
 
+  /** Floating book control when primary button scrolls out of view */
+  useEffect(() => {
+    if (!canBook || modalOpen || loading) {
+      setFabBookVisible(false)
+      return undefined
+    }
+    const el = mainBookBtnRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined
+    const io = new IntersectionObserver(([e]) => {
+      const vis = typeof e?.isIntersecting === 'boolean' ? e.isIntersecting : true
+      setFabBookVisible(!vis)
+    }, { root: null, threshold: 0, rootMargin: '16px 0px 16px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [canBook, modalOpen, loading, vehicle?.id])
+
   function openModal() {
     if (!canBook) return
     setBookedOk(false)
@@ -187,10 +205,7 @@ export function PublicVehicleBook() {
     if (!id || !canBook || submitting) return
 
     if (!BOOKING_FN_CONFIGURED) {
-      addNotification(
-        'Online submit isn’t connected yet (missing booking URL on this site). Please call the showroom with your chosen date and time.',
-        'error',
-      )
+      addNotification('Booking not online yet — please phone us with your date & time.', 'error')
       return
     }
 
@@ -232,7 +247,7 @@ export function PublicVehicleBook() {
         hp_company: hpCompany,
       })
       setBookedOk(true)
-      addNotification('Request sent — the team will confirm your viewing.', 'success')
+      addNotification("Sent — we'll phone you.", 'success')
       setModalOpen(false)
       setSelectedDate(undefined)
       setSelectedSlotId(null)
@@ -312,53 +327,40 @@ export function PublicVehicleBook() {
               <CalendarClock className="w-5 h-5 text-sky-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-lg font-bold text-white leading-tight">Book a viewing</h1>
-              <p className="text-base sm:text-sm text-zinc-400 mt-2 sm:mt-1 leading-relaxed">
-                Mon–Sat <span className="text-zinc-300">10am–7pm</span>, Sun{' '}
-                <span className="text-zinc-300">12:30pm–3:30pm</span> (half-hour slots). Times shown in your device&apos;s
-                timezone; we&apos;ll confirm with you before you arrive.
+              <h1 className="text-xl font-bold text-white leading-tight">Book a viewing</h1>
+              <p className="text-zinc-400 mt-2 text-[15px] leading-snug">
+                Mon–Sat <span className="text-zinc-200 font-medium">10am–7pm</span> · Sun{' '}
+                <span className="text-zinc-200 font-medium">12:30pm–3:30pm</span>.
               </p>
             </div>
           </div>
 
           {!canBook ? (
             <div className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              {isSold
-                ? 'This vehicle has been sold, so online booking is closed.'
-                : 'This vehicle is reserved — online booking isn’t available. Please browse other stock or contact us.'}
+              {isSold ? 'Sold — not bookable.' : 'Reserved — not bookable.'}
             </div>
           ) : null}
 
           {bookedOk && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-200">
               <CheckCircle className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" aria-hidden />
-              <p>
-                Thanks — your viewing request has been saved. Someone from the dealership will contact you to confirm or
-                adjust the time.
-              </p>
+              <p>Request received. We&apos;ll confirm by phone.</p>
             </div>
           )}
 
           <button
+            ref={mainBookBtnRef}
             type="button"
             disabled={!canBook}
             onClick={openModal}
             className="mt-5 w-full min-h-[52px] py-4 sm:py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-base transition shadow-md shadow-sky-900/40 touch-manipulation"
           >
-            {canBook ? 'Choose date & time' : 'Booking unavailable'}
+            {canBook ? 'Choose date & time' : 'Not available'}
           </button>
 
-          {canBook && !BOOKING_FN_CONFIGURED && (
-            <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
-              Tap above to pick a slot (Mon–Sat 10am–7pm, Sun 12:30–3:30pm). Sending the request online needs the booking
-              service URL on this site — if submit isn’t available, call the showroom with your chosen time.
-            </p>
-          )}
-          {import.meta.env.DEV && canBook && !BOOKING_FN_CONFIGURED && (
-            <p className="mt-1.5 text-[10px] text-zinc-600 font-mono leading-snug">
-              Dev: add VITE_PUBLIC_VIEWING_BOOKING_URL → deploy submitPublicViewingBooking (see functions/README.md).
-            </p>
-          )}
+          {import.meta.env.DEV && canBook && !BOOKING_FN_CONFIGURED ? (
+            <p className="mt-2 text-[10px] text-zinc-600 font-mono leading-snug">Dev: set VITE_PUBLIC_VIEWING_BOOKING_URL to submit.</p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/40">
@@ -402,7 +404,7 @@ export function PublicVehicleBook() {
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3 text-sm mb-4">
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">About this vehicle</p>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Details</p>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-zinc-300">
             {vehicle.model_year != null && vehicle.model_year !== '' && (
               <>
@@ -477,12 +479,9 @@ export function PublicVehicleBook() {
           <section className="mt-6 mb-2" aria-labelledby="similar-models-heading">
             <div className="flex items-end justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <h2 id="similar-models-heading" className="text-base sm:text-sm font-semibold text-white tracking-tight">
-                  More available {vehicle.brand} {vehicle.model}
+                <h2 id="similar-models-heading" className="text-base font-semibold text-white tracking-tight">
+                  Same model · other cars
                 </h2>
-                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
-                  Tap a car to choose another viewing · same model on the yard
-                </p>
               </div>
               {carouselOverflows && !similarLoading ? (
                 <div className="flex gap-1 shrink-0">
@@ -563,9 +562,45 @@ export function PublicVehicleBook() {
 
       <Footer />
 
+      {canBook && !modalOpen && (
+        <button
+          type="button"
+          onClick={openModal}
+          aria-label="Book a viewing"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.25rem)',
+            right: 'max(1rem, env(safe-area-inset-right, 0px))',
+          }}
+          className={`fixed z-[85] hidden min-h-14 touch-manipulation items-center gap-2 rounded-2xl border border-white/15 bg-sky-600 px-5 py-3 font-semibold text-[15px] text-white shadow-2xl shadow-black/35 transition-all duration-300 ease-out md:flex md:-translate-x-0 ${
+            fabBookVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-8 opacity-0'
+          }`}
+        >
+          <CalendarClock className="h-6 w-6 shrink-0" aria-hidden />
+          Book visit
+        </button>
+      )}
+
+      {canBook && !modalOpen && (
+        <button
+          type="button"
+          onClick={openModal}
+          aria-label="Book a viewing"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.125rem)',
+            left: '50%',
+          }}
+          className={`fixed z-[85] inline-flex min-h-14 max-w-[min(22rem,calc(100vw-2rem))] min-w-[10.5rem] -translate-x-1/2 touch-manipulation items-center justify-center gap-2 rounded-full border border-white/15 bg-sky-600 px-6 py-3.5 font-semibold text-[15px] text-white shadow-2xl shadow-black/35 transition-all duration-300 ease-out md:hidden ${
+            fabBookVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-8 opacity-0'
+          }`}
+        >
+          <CalendarClock className="h-6 w-6 shrink-0" aria-hidden />
+          Book visit
+        </button>
+      )}
+
       {modalOpen && (
         <div
-          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm touch-manipulation"
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
           role="presentation"
           onClick={closeModal}
         >
@@ -573,38 +608,29 @@ export function PublicVehicleBook() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="book-modal-title"
-            className="w-full sm:max-w-md max-h-[min(94dvh,880px)] sm:max-h-[90vh] overflow-hidden flex flex-col rounded-t-[1.35rem] sm:rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+            className="flex h-[92dvh] max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.25rem] border border-zinc-700 bg-zinc-900 shadow-2xl sm:h-auto sm:max-h-[min(88vh,40rem)] sm:max-w-md sm:rounded-2xl"
             onClick={(ev) => ev.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2 pl-5 pr-2 pt-[max(0.75rem,env(safe-area-inset-top,0px))] pb-3 sm:py-3 border-b border-zinc-800 shrink-0">
-              <h2 id="book-modal-title" className="text-lg sm:text-base font-semibold text-white">
-                Request a viewing
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800 pl-4 pr-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-3">
+              <h2 id="book-modal-title" className="pl-1 text-lg font-semibold text-white">
+                Book a viewing
               </h2>
               <button
                 type="button"
                 onClick={closeModal}
-                className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-white active:bg-zinc-700 touch-manipulation"
+                className="min-h-11 min-w-11 shrink-0 rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-white touch-manipulation"
                 aria-label="Close"
               >
-                <X className="w-6 h-6 sm:w-5 sm:h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-hidden flex flex-col relative">
-              <div className="p-4 pb-6 space-y-4 customer-booking-calendar flex-1 min-h-0 overflow-y-auto smooth-ios-scroll px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-                <p className="text-sm text-zinc-500 leading-relaxed">
-                  Mon–Sat use full-day hours below; Sundays use shortened hours. Slots are every 30 minutes during
-                  opening hours.
-                </p>
-
-                {!BOOKING_FN_CONFIGURED ? (
-                  <p className="text-sm text-sky-100/95 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 leading-snug">
-                    Pick a slot below within opening hours. Sending your details online only works after this site is
-                    linked to the booking service — if needed, call the showroom with the time you chose here.
-                  </p>
-                ) : null}
-
-                <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2 sm:p-2 overflow-x-auto">
+            <form
+              onSubmit={handleSubmit}
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              <div className="customer-booking-calendar relative flex-1 min-h-0 space-y-4 overflow-y-auto overscroll-contain px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-4 pt-4">
+                <div className="flex justify-center overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
                   <DayPicker
                     mode="single"
                     selected={selectedDate}
@@ -620,22 +646,22 @@ export function PublicVehicleBook() {
                 </div>
 
                 <div>
-                  <p className="text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Time</p>
+                  <p className="mb-2 text-[13px] font-semibold text-zinc-300">Time</p>
                   {!selectedDate ? (
-                    <p className="text-sm text-zinc-500 leading-relaxed">Pick a date above to load available times.</p>
+                    <p className="text-[15px] text-zinc-500">Tap a date first.</p>
                   ) : slotsForDay.length === 0 ? (
-                    <p className="text-sm text-zinc-500">That day isn’t available.</p>
+                    <p className="text-[15px] text-zinc-500">Pick another day.</p>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-[min(52vh,20rem)] overflow-y-auto pr-1 smooth-ios-scroll">
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                       {slotsForDay.map((s) => (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => setSelectedSlotId(s.id)}
-                          className={`rounded-xl border px-2 py-3 min-h-[48px] text-center text-sm font-medium transition touch-manipulation ${
+                          className={`min-h-[48px] rounded-xl border px-2 py-3 text-center text-sm font-semibold transition touch-manipulation ${
                             selectedSlotId === s.id
                               ? 'border-sky-500 bg-sky-500/15 text-sky-200'
-                              : 'border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600'
+                              : 'border-zinc-700 bg-zinc-950/60 text-zinc-300'
                           }`}
                         >
                           {s.label}
@@ -646,67 +672,71 @@ export function PublicVehicleBook() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    Your name *
+                  <label className="mb-2 block text-[13px] font-semibold text-zinc-400" htmlFor="book-name">
+                    Name
                   </label>
                   <input
+                    id="book-name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     maxLength={130}
                     autoComplete="name"
                     enterKeyHint="next"
-                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
-                    placeholder="e.g. Sam Taylor"
+                    className="w-full min-h-[48px] rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600"
+                    placeholder="Your name"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    Phone *
+                  <label className="mb-2 block text-[13px] font-semibold text-zinc-400" htmlFor="book-phone">
+                    Phone
                   </label>
                   <input
+                    id="book-phone"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     maxLength={45}
                     autoComplete="tel"
                     inputMode="tel"
                     enterKeyHint="next"
-                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
-                    placeholder="So we can confirm your visit"
+                    className="w-full min-h-[48px] rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600"
+                    placeholder="Mobile number"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    Email (optional)
+                  <label className="mb-2 block text-[13px] font-semibold text-zinc-400" htmlFor="book-email">
+                    Email <span className="font-normal text-zinc-500">(optional)</span>
                   </label>
                   <input
+                    id="book-email"
                     type="email"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
                     maxLength={170}
                     autoComplete="email"
-                    enterKeyHint="next"
-                    className="mt-2 w-full min-h-[48px] rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600"
-                    placeholder="Optional"
+                    enterKeyHint="done"
+                    className="w-full min-h-[48px] rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] sm:text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
-                    Message (optional)
+                  <label className="mb-2 block text-[13px] font-semibold text-zinc-400" htmlFor="book-notes">
+                    Note <span className="font-normal text-zinc-500">(optional)</span>
                   </label>
                   <textarea
+                    id="book-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     maxLength={1250}
-                    rows={3}
-                    className="mt-2 w-full rounded-xl bg-zinc-950 border border-zinc-700 px-4 py-3 text-base text-white placeholder:text-zinc-600 resize-y min-h-[5rem] leading-snug"
-                    placeholder="Anything we should know (no links required)"
+                    rows={2}
+                    className="min-h-[4rem] w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600 leading-snug"
                   />
                 </div>
 
-                {/* Honeypot — hidden from users; bots often fill visible-offscreen fields */}
-                <div className="absolute -left-[9999px] top-0 opacity-0 w-px h-px overflow-hidden" aria-hidden="true">
+                <div
+                  className="pointer-events-none absolute left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
+                  aria-hidden="true"
+                >
                   <label htmlFor="hp-company">Company</label>
                   <input
                     id="hp-company"
@@ -718,21 +748,21 @@ export function PublicVehicleBook() {
                 </div>
               </div>
 
-              <div className="border-t border-zinc-800 flex gap-3 shrink-0 bg-zinc-900/95 px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div className="flex shrink-0 gap-3 border-t border-zinc-800 bg-zinc-900 px-[max(1rem,env(safe-area-inset-left))] py-3 pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 min-h-[52px] py-3.5 rounded-xl border border-zinc-600 text-zinc-300 text-base font-semibold hover:bg-zinc-800 touch-manipulation"
+                  className="flex-1 min-h-[52px] rounded-xl border border-zinc-600 py-3.5 text-base font-semibold text-zinc-200 touch-manipulation"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 min-h-[52px] py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white text-base font-semibold inline-flex items-center justify-center gap-2 touch-manipulation"
+                  className="flex-[1.2] inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3.5 text-base font-semibold text-white touch-manipulation disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Send request
+                  {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                  Send
                 </button>
               </div>
             </form>
