@@ -13,12 +13,14 @@
   "dependencies": {
     "@sanity/client": "^7.20.0",
     "browser-image-compression": "^2.0.2",
+    "dompurify": "^3.4.5",
     "firebase": "^12.11.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.574.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
+    "react-day-picker": "^10.0.1",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.13.0",
     "recharts": "^2.15.0",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@types/dompurify": "^3.0.5",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",

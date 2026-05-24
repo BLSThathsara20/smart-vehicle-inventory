@@ -57,6 +57,33 @@ html {
 }
 
 /* Prevent overscroll on mobile */
-body {
+	body {
 	overscroll-behavior: none;
+}
+
+/* Public customer viewing booking — react-day-picker (v10) */
+.customer-booking-calendar .rdp-root {
+	--rdp-accent-color: #0ea5e9;
+	--rdp-accent-background-color: rgba(14, 165, 233, 0.18);
+	--rdp-day-height: 2.35rem;
+	--rdp-day-width: 2.35rem;
+	--rdp-outside-opacity: 0.45;
+	color: #e4e4e7;
+	font-size: 0.875rem;
+}
+.customer-booking-calendar .rdp-day_button {
+	border-radius: 0.5rem;
+}
+.customer-booking-calendar .rdp-month_caption {
+	font-weight: 600;
+	color: #fafafa;
+}
+.customer-booking-calendar .rdp-weekday {
+	color: #a1a1aa;
+	text-transform: uppercase;
+	font-size: 0.65rem;
+	font-weight: 600;
+}
+.customer-booking-calendar .rdp-disabled {
+	opacity: 0.28;
 }

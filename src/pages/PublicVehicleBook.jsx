@@ -1,0 +1,492 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { DayPicker } from 'react-day-picker'
+import 'react-day-picker/style.css'
+import { CalendarClock, Car, CheckCircle, Loader2, Lock, Package, X } from 'lucide-react'
+import { fetchVehiclePublicById } from '../lib/sanityData'
+import { submitPublicViewingBooking } from '../lib/publicViewingBooking'
+import {
+  sanitizeCustomerEmail,
+  sanitizeCustomerPhone,
+  sanitizeCustomerPlainText,
+} from '../lib/sanitizeCustomerInput'
+import { LazyVehicleImage } from '../components/LazyVehicleImage'
+import { LoadingState } from '../components/LoadingState'
+import { Footer } from '../components/Footer'
+import { useNotification } from '../context/NotificationContext'
+
+const TIME_PRESETS = [
+  { id: 'morning', label: 'Morning', hint: 'Roughly 9am–12pm', hour: 10 },
+  { id: 'afternoon', label: 'Afternoon', hint: 'Roughly 12pm–3pm', hour: 14 },
+  { id: 'evening', label: 'Evening', hint: 'Roughly 3pm–6pm', hour: 17 },
+]
+
+function startOfLocalDay(d) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+function buildSlotIso(selectedDay, hour) {
+  const d = startOfLocalDay(selectedDay)
+  d.setHours(Number(hour), 0, 0, 0)
+  return d.toISOString()
+}
+
+function digitCount(s) {
+  return (String(s || '').match(/\d/g) || []).length
+}
+
+export function PublicVehicleBook() {
+  const { id } = useParams()
+  const { addNotification } = useNotification()
+  const [vehicle, setVehicle] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(undefined)
+  const [timePreset, setTimePreset] = useState(null)
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
+  const [notes, setNotes] = useState('')
+  /** Bot trap — must stay empty */
+  const [hpCompany, setHpCompany] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [bookedOk, setBookedOk] = useState(false)
+
+  const todayStart = useMemo(() => startOfLocalDay(new Date()), [])
+  const maxDay = useMemo(() => {
+    const m = new Date()
+    m.setDate(m.getDate() + 60)
+    m.setHours(0, 0, 0, 0)
+    return m
+  }, [])
+
+  const reload = useCallback(async () => {
+    if (!id) {
+      setNotFound(true)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setNotFound(false)
+    try {
+      const v = await fetchVehiclePublicById(id)
+      if (!v) {
+        setNotFound(true)
+        setVehicle(null)
+      } else {
+        setVehicle(v)
+      }
+    } catch {
+      setNotFound(true)
+      setVehicle(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  const isSold = vehicle?.sold
+  const isReserved = vehicle?.reserved && !vehicle?.sold
+  const canBook = vehicle && !isSold && !isReserved
+
+  function openModal() {
+    if (!canBook) return
+    setBookedOk(false)
+    setModalOpen(true)
+  }
+
+  function closeModal() {
+    setModalOpen(false)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!id || !canBook || submitting) return
+
+    const nameClean = sanitizeCustomerPlainText(customerName, 120)
+    const phoneClean = sanitizeCustomerPhone(customerPhone, 40)
+    const emailClean = sanitizeCustomerEmail(customerEmail, 160)
+    const notesClean = sanitizeCustomerPlainText(notes, 1200)
+
+    if (nameClean.length < 2) {
+      addNotification('Please enter your name (at least 2 characters).', 'error')
+      return
+    }
+    if (digitCount(phoneClean) < 7) {
+      addNotification('Please enter a valid phone number we can reach you on.', 'error')
+      return
+    }
+    if (!selectedDate) {
+      addNotification('Choose a day from the calendar.', 'error')
+      return
+    }
+    if (!timePreset) {
+      addNotification('Pick a rough time of day (morning, afternoon, or evening).', 'error')
+      return
+    }
+    const preset = TIME_PRESETS.find((p) => p.id === timePreset)
+    if (!preset) return
+
+    const scheduled_at = buildSlotIso(selectedDate, preset.hour)
+
+    setSubmitting(true)
+    try {
+      await submitPublicViewingBooking({
+        vehicleId: id,
+        customer_name: nameClean,
+        customer_phone: phoneClean,
+        customer_email: emailClean,
+        notes: notesClean,
+        scheduled_at,
+        hp_company: hpCompany,
+      })
+      setBookedOk(true)
+      addNotification('Request sent — the team will confirm your viewing.', 'success')
+      setModalOpen(false)
+      setSelectedDate(undefined)
+      setTimePreset(null)
+      setCustomerName('')
+      setCustomerPhone('')
+      setCustomerEmail('')
+      setNotes('')
+      setHpCompany('')
+    } catch (err) {
+      addNotification(err.message || 'Could not submit. Try again or call us.', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950">
+        <LoadingState message="Loading vehicle…" variant="embedded" className="py-24" />
+      </div>
+    )
+  }
+
+  if (notFound || !vehicle) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+        <header className="border-b border-zinc-800 px-4 py-4">
+          <Link to="/find" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm">
+            ← Back to stock
+          </Link>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center pb-24">
+          <Car className="w-14 h-14 text-zinc-600 mb-4" />
+          <p className="text-lg font-medium text-zinc-300">Vehicle not found</p>
+          <p className="text-zinc-500 text-sm mt-1 max-w-md">The link may be wrong or this listing may have been removed.</p>
+          <Link
+            to="/find"
+            className="mt-6 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold text-sm"
+          >
+            Browse stock
+          </Link>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
+
+  const primaryImage = vehicle.images?.[0]?.url
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col public-book-page">
+      <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link to={`/find/vehicle/${encodeURIComponent(vehicle.id)}`} className="text-sm text-zinc-400 hover:text-white shrink-0">
+            ← Vehicle summary
+          </Link>
+          <Link to="/find" className="text-xs text-zinc-500 hover:text-zinc-300">
+            All stock
+          </Link>
+        </div>
+      </header>
+
+      <div className="max-w-lg mx-auto w-full px-4 pt-5 pb-4 flex-1 flex flex-col gap-4">
+        <div className="rounded-2xl border border-sky-500/35 bg-gradient-to-br from-sky-500/10 to-zinc-900/60 p-4 sm:p-5 shadow-lg">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-sky-500/20 flex items-center justify-center shrink-0 border border-sky-500/30">
+              <CalendarClock className="w-5 h-5 text-sky-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-bold text-white leading-tight">Book a viewing</h1>
+              <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
+                Pick a day and a rough time. We&apos;ll add this to our diary and confirm with you — no account needed.
+              </p>
+            </div>
+          </div>
+
+          {!canBook ? (
+            <div className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              {isSold
+                ? 'This vehicle has been sold, so online booking is closed.'
+                : 'This vehicle is reserved — online booking isn’t available. Please browse other stock or contact us.'}
+            </div>
+          ) : null}
+
+          {bookedOk && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-200">
+              <CheckCircle className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" aria-hidden />
+              <p>
+                Thanks — your viewing request has been saved. Someone from the dealership will contact you to confirm or
+                adjust the time.
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={!canBook}
+            onClick={openModal}
+            className="mt-5 w-full py-3.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition shadow-md shadow-sky-900/40"
+          >
+            {canBook ? 'Choose date & time' : 'Booking unavailable'}
+          </button>
+
+          {!import.meta.env.VITE_PUBLIC_VIEWING_BOOKING_URL && (
+            <p className="mt-3 text-[11px] text-amber-200/85 leading-relaxed">
+              Booking isn&apos;t wired up yet (missing <span className="font-mono">VITE_PUBLIC_VIEWING_BOOKING_URL</span>).
+              Your dealer can deploy the cloud function from the repo README.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/40">
+          <div className="aspect-[4/3] bg-zinc-950 relative">
+            <LazyVehicleImage
+              src={primaryImage}
+              alt={`${vehicle.brand} ${vehicle.model}`}
+              className="absolute inset-0 w-full h-full"
+              imgClassName="object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+            {isSold && (
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-rose-600/95 text-white text-xs font-semibold flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" /> Sold
+              </div>
+            )}
+            {isReserved && !isSold && (
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-amber-600/95 text-white text-xs font-semibold flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5" /> Reserved
+              </div>
+            )}
+            {!isSold && !isReserved && (
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-emerald-600/95 text-zinc-950 text-xs font-semibold flex items-center gap-1">
+                <Package className="w-3.5 h-3.5" /> Available
+              </div>
+            )}
+            <div className="absolute bottom-3 left-3 right-3">
+              <p className="text-white font-semibold text-xl">
+                {vehicle.brand} {vehicle.model}
+              </p>
+              {vehicle.stock_id != null && vehicle.stock_id !== '' && (
+                <p className="text-amber-400/95 font-mono text-sm mt-1">#{vehicle.stock_id}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3 text-sm mb-8">
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">About this vehicle</p>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-zinc-300">
+            {vehicle.model_year != null && vehicle.model_year !== '' && (
+              <>
+                <dt className="text-zinc-500">Year</dt>
+                <dd>{vehicle.model_year}</dd>
+              </>
+            )}
+            {vehicle.body && (
+              <>
+                <dt className="text-zinc-500">Body</dt>
+                <dd>{vehicle.body}</dd>
+              </>
+            )}
+            {vehicle.color && (
+              <>
+                <dt className="text-zinc-500">Colour</dt>
+                <dd>{vehicle.color}</dd>
+              </>
+            )}
+            {vehicle.mileage != null && (
+              <>
+                <dt className="text-zinc-500">Mileage</dt>
+                <dd>{Number(vehicle.mileage).toLocaleString()} miles</dd>
+              </>
+            )}
+          </dl>
+          {vehicle.details && (
+            <div className="pt-2 border-t border-zinc-800">
+              <p className="text-zinc-500 text-xs uppercase mb-1">Notes</p>
+              <p className="text-zinc-400 whitespace-pre-wrap text-sm leading-relaxed">{vehicle.details}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Footer />
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
+          role="presentation"
+          onClick={closeModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="book-modal-title"
+            className="w-full sm:max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col rounded-t-2xl sm:rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-zinc-800 shrink-0">
+              <h2 id="book-modal-title" className="text-base font-semibold text-white">
+                Request a viewing
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col relative">
+              <div className="p-4 space-y-4 customer-booking-calendar">
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  Times use your device&apos;s local timezone. We&apos;ll confirm the exact slot with you.
+                </p>
+
+                <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
+                  <DayPicker
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    disabled={[
+                      { before: todayStart },
+                      { after: maxDay },
+                    ]}
+                    showOutsideDays
+                    fixedWeeks
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Rough time</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TIME_PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setTimePreset(p.id)}
+                        className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                          timePreset === p.id
+                            ? 'border-sky-500 bg-sky-500/15 text-sky-200'
+                            : 'border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{p.label}</span>
+                        <span className="block text-[10px] text-zinc-500 mt-0.5 leading-tight">{p.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Your name *</label>
+                  <input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    maxLength={130}
+                    autoComplete="name"
+                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    placeholder="e.g. Sam Taylor"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Phone *</label>
+                  <input
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    maxLength={45}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    placeholder="So we can confirm your visit"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Email (optional)</label>
+                  <input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    maxLength={170}
+                    autoComplete="email"
+                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    Message (optional)
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    maxLength={1250}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 resize-y min-h-[4.5rem]"
+                    placeholder="Anything we should know (no links required)"
+                  />
+                </div>
+
+                {/* Honeypot — hidden from users; bots often fill visible-offscreen fields */}
+                <div className="absolute -left-[9999px] top-0 opacity-0 w-px h-px overflow-hidden" aria-hidden="true">
+                  <label htmlFor="hp-company">Company</label>
+                  <input
+                    id="hp-company"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={hpCompany}
+                    onChange={(e) => setHpCompany(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 p-4 flex gap-2 shrink-0 bg-zinc-900/90">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 py-3 rounded-xl border border-zinc-600 text-zinc-300 text-sm font-medium hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-sm font-semibold inline-flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Send request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

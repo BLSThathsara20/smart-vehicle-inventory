@@ -12,7 +12,7 @@ import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { VehicleCard } from '../components/VehicleCard'
 import { getSimilarVehicles } from '../lib/similarVehicles'
-import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown, ClipboardCheck } from 'lucide-react'
+import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown, ClipboardCheck, CalendarPlus } from 'lucide-react'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { VehiclePhotoGalleryModal } from '../components/VehiclePhotoGalleryModal'
 import { LoadingState } from '../components/LoadingState'
@@ -23,6 +23,7 @@ import { ViewingBookingsModal } from '../components/ViewingBookingsModal'
 import { ReserveModal } from '../components/ReserveModal'
 import { DETAIL_SECTIONS } from '../lib/vehicleDetailFields'
 import { isNewlyArrivedStatus } from '../lib/vehicleStatus'
+import { buildPublicVehicleBookingAbsoluteUrl } from '../lib/publicBookingUrls'
 
 function HeroImageStack({ primaryImage, vehicle, isReserved, isSold, isAvailable, isNewShipment, galleryCount }) {
   return (
@@ -254,6 +255,17 @@ export function VehicleDetail() {
     }
   }
 
+  async function copyCustomerBookingLink() {
+    if (!vehicle?.id) return
+    try {
+      const url = buildPublicVehicleBookingAbsoluteUrl(vehicle.id)
+      await navigator.clipboard.writeText(url)
+      addNotification('Booking link copied — customer can choose a viewing time online', 'success')
+    } catch {
+      addNotification('Could not copy link', 'error')
+    }
+  }
+
   async function handleDelete() {
     if (!confirm('Delete this vehicle?')) return
     try {
@@ -315,6 +327,7 @@ export function VehicleDetail() {
     (b) => (b.status || 'scheduled') === 'scheduled'
   ).length
   const showViewingsEntry = canViewInventory && !isReserved
+  const showCustomerBookingShare = canViewInventory && !isSold && !isReserved
   const workflowInstanceCount = normalizeVehicleWorkflowInstances(vehicle).length
   const showCollectionReport =
     canViewInventory &&
@@ -331,8 +344,19 @@ export function VehicleDetail() {
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
-            {(canEdit || showViewingsEntry) && (
+            {(canEdit || showViewingsEntry || showCustomerBookingShare) && (
               <div className="flex flex-wrap gap-2 justify-end">
+                {showCustomerBookingShare && (
+                  <button
+                    type="button"
+                    onClick={copyCustomerBookingLink}
+                    title="Copy customer link — book a viewing"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/25 font-medium transition"
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                    Share booking link
+                  </button>
+                )}
                 {showViewingsEntry && (
                   <button
                     type="button"

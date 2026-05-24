@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { LoadingState } from '../components/LoadingState'
 import { Footer } from '../components/Footer'
-import { ArrowLeft, Car, Lock, LogIn, Package, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Car, Lock, LogIn, Package, CheckCircle, CalendarPlus } from 'lucide-react'
 
 export function PublicVehiclePreview() {
   const { id } = useParams()
@@ -130,7 +130,23 @@ export function PublicVehiclePreview() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 pt-6 pb-10">
+        {!vehicle.sold && !(vehicle.reserved && !vehicle.sold) && (
+          <div className="mb-6 rounded-2xl border border-sky-500/35 bg-gradient-to-br from-sky-500/10 to-zinc-900/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">Want to see this car?</p>
+              <p className="text-xs text-zinc-400 mt-1">Pick a day and a rough time — we&apos;ll confirm with you.</p>
+            </div>
+            <Link
+              to={`/book/vehicle/${encodeURIComponent(id)}`}
+              className="mt-3 sm:mt-0 shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold transition"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              Book a viewing
+            </Link>
+          </div>
+        )}
+
         <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/40 mb-6">
           <div className="aspect-[4/3] bg-zinc-950 relative">
             <LazyVehicleImage
