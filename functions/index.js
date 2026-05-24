@@ -182,7 +182,7 @@ function digitsOnlyCount(s) {
 
 /**
  * Validates wall-clock instant in PUBLIC_BOOKING_TIMEZONE (Luxon weekdays: Mon=1 … Sun=7).
- * Weekdays Mon–Fri 10:00–last start 18:30; Sun 12:30–15:00 starts; Sat closed.
+ * Mon–Sat 10:00–last start 18:30; Sun 12:30–15:00 starts.
  */
 function validatePublicBookingOpeningHours(scheduledIso) {
   const tz = process.env.PUBLIC_BOOKING_TIMEZONE || 'Europe/London'
@@ -199,18 +199,14 @@ function validatePublicBookingOpeningHours(scheduledIso) {
     return { ok: false, error: 'Choose a slot from the booking calendar.' }
   }
 
-  const dow = local.weekday // 6 = Sat, 7 = Sun
+  const dow = local.weekday // … 6 = Sat, 7 = Sun
 
-  if (dow === 6) {
-    return { ok: false, error: 'We are closed on Saturdays.' }
-  }
-
-  // Mon–Fri
-  if (dow >= 1 && dow <= 5) {
+  // Mon–Sat
+  if (dow >= 1 && dow <= 6) {
     const open = 10 * 60
     const latestStart = 18 * 60 + 30
     if (totalMinutes < open || totalMinutes > latestStart) {
-      return { ok: false, error: 'Weekday viewing hours are 10am–7pm (half-hour slots).' }
+      return { ok: false, error: 'Mon–Sat viewing hours are 10am–7pm (half-hour slots).' }
     }
     return { ok: true }
   }

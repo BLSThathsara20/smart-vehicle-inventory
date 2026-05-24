@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import { useNotification } from '../context/NotificationContext'
 import { VehicleForm } from '../components/VehicleForm'
 import { VehicleCard } from '../components/VehicleCard'
-import { getSimilarVehicles } from '../lib/similarVehicles'
+import { getSimilarVehiclesSameModel } from '../lib/similarVehicles'
 import { ArrowLeft, Pencil, Car, X, Loader2, Lock, CheckCircle, Link2, Copy, Images, CalendarClock, Package, FileDown, ClipboardCheck, CalendarPlus } from 'lucide-react'
 import { LazyVehicleImage } from '../components/LazyVehicleImage'
 import { VehiclePhotoGalleryModal } from '../components/VehiclePhotoGalleryModal'
@@ -117,8 +117,8 @@ export function VehicleDetail() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [similarOpen, setSimilarOpen] = useState(false)
-  const [similarVehicles, setSimilarVehicles] = useState([])
-  const [similarLoading, setSimilarLoading] = useState(false)
+  const [similarSameModelOpts, setSimilarSameModelOpts] = useState([])
+  const [similarSameModelLoading, setSimilarSameModelLoading] = useState(false)
   const [generatingLink, setGeneratingLink] = useState(false)
   const [reserveOpen, setReserveOpen] = useState(false)
   const [editForReservationDetails, setEditForReservationDetails] = useState(false)
@@ -126,9 +126,6 @@ export function VehicleDetail() {
   const [viewingsOpen, setViewingsOpen] = useState(false)
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [detailLoadMessage, setDetailLoadMessage] = useState('Fetching vehicle…')
-  const [similarLoadMessage, setSimilarLoadMessage] = useState(
-    'Loading other vehicles for comparison…'
-  )
   const [markingAvailable, setMarkingAvailable] = useState(false)
 
   useEffect(() => {
@@ -180,6 +177,30 @@ export function VehicleDetail() {
       if (!vehicle.reserved) setViewingsOpen(true)
     }
   }, [vehicle, searchParams, setSearchParams])
+
+  useEffect(() => {
+    setSimilarSameModelOpts([])
+    if (!vehicle?.id || !String(vehicle.brand ?? '').trim() || !String(vehicle.model ?? '').trim()) {
+      setSimilarSameModelLoading(false)
+      return undefined
+    }
+    let cancelled = false
+    setSimilarSameModelLoading(true)
+    ;(async () => {
+      try {
+        const withUrls = await fetchSimilarVehiclesPool(vehicle.id)
+        if (cancelled) return
+        setSimilarSameModelOpts(getSimilarVehiclesSameModel(vehicle, withUrls, 12))
+      } catch {
+        if (!cancelled) setSimilarSameModelOpts([])
+      } finally {
+        if (!cancelled) setSimilarSameModelLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [vehicle])
 
   async function refreshVehicle() {
     const loadId = id
@@ -274,23 +295,6 @@ export function VehicleDetail() {
       navigate('/app/inventory')
     } catch (err) {
       addNotification(err.message || 'Delete failed', 'error')
-    }
-  }
-
-  async function fetchSimilarOptions() {
-    setSimilarOpen(true)
-    setSimilarLoading(true)
-    setSimilarVehicles([])
-    setSimilarLoadMessage('Loading other vehicles for comparison…')
-    try {
-      const withUrls = await fetchSimilarVehiclesPool(id)
-      setSimilarLoadMessage('Picking similar vehicles from loaded stock…')
-      const similar = getSimilarVehicles(vehicle, withUrls, 12)
-      setSimilarVehicles(similar)
-    } catch (err) {
-      addNotification(err.message || 'Failed to load similar vehicles', 'error')
-    } finally {
-      setSimilarLoading(false)
     }
   }
 
@@ -722,13 +726,16 @@ export function VehicleDetail() {
             </div>
           )}
 
-          <button
-            onClick={fetchSimilarOptions}
-            className="w-full py-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700/60 hover:border-zinc-600 hover:text-white font-medium flex items-center justify-center gap-2 mb-4 transition"
-          >
-            <Car className="w-5 h-5" />
-            Similar Options
-          </button>
+          {!similarSameModelLoading && similarSameModelOpts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSimilarOpen(true)}
+              className="w-full py-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/60 text-zinc-300 hover:bg-zinc-700/60 hover:border-zinc-600 hover:text-white font-medium flex items-center justify-center gap-2 mb-4 transition"
+            >
+              <Car className="w-5 h-5" />
+              Similar options ({similarSameModelOpts.length})
+            </button>
+          ) : null}
 
           {canDelete && (
             <button
@@ -750,7 +757,7 @@ export function VehicleDetail() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center p-5 border-b border-zinc-700/80">
-                <h3 className="text-lg font-semibold text-white tracking-tight">Similar Vehicles</h3>
+                <h3 className="text-lg font-semibold text-white tracking-tight">Same model in stock</h3>
                 <button
                   type="button"
                   onClick={() => setSimilarOpen(false)}
@@ -761,19 +768,16 @@ export function VehicleDetail() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-5">
-                {similarLoading ? (
-                  <LoadingState message={similarLoadMessage} variant="embedded" className="py-16" />
-                ) : similarVehicles.length === 0 ? (
+                {similarSameModelOpts.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-zinc-800/80 flex items-center justify-center">
                       <Car className="w-7 h-7 text-zinc-600" />
                     </div>
-                    <p className="text-zinc-400 font-medium">No similar vehicles in stock</p>
-                    <p className="text-zinc-600 text-sm mt-1">Browse inventory for alternatives</p>
+                    <p className="text-zinc-400 font-medium">No matching vehicles right now</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    {similarVehicles.map((v) => (
+                    {similarSameModelOpts.map((v) => (
                       <div key={v.id} onClick={() => setSimilarOpen(false)}>
                         <VehicleCard vehicle={v} />
                       </div>

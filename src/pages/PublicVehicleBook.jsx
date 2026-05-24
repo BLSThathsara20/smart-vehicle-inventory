@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import { CalendarClock, Car, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, Package, X } from 'lucide-react'
-import { fetchVehiclePublicById, fetchPublicBookingAlternatesByModel, fetchSimilarVehiclesPool } from '../lib/sanityData'
-import { getSimilarVehicles } from '../lib/similarVehicles'
+import { fetchVehiclePublicById, fetchPublicBookingAlternatesByModel } from '../lib/sanityData'
 import { submitPublicViewingBooking } from '../lib/publicViewingBooking'
 import {
   sanitizeCustomerEmail,
@@ -61,6 +60,7 @@ export function PublicVehicleBook() {
   const [similar, setSimilar] = useState([])
   const [similarLoading, setSimilarLoading] = useState(false)
   const carouselRef = useRef(null)
+  const [carouselOverflows, setCarouselOverflows] = useState(false)
 
   const todayStart = useMemo(() => startOfLocalDay(new Date()), [modalOpen])
   const maxDay = useMemo(() => {
@@ -118,11 +118,7 @@ export function PublicVehicleBook() {
     ;(async () => {
       setSimilarLoading(true)
       try {
-        let rows = await fetchPublicBookingAlternatesByModel(vehicle.id, vehicle.brand, vehicle.model, 20)
-        if (!cancelled && rows.length === 0) {
-          const pool = await fetchSimilarVehiclesPool(vehicle.id)
-          if (!cancelled) rows = getSimilarVehicles(vehicle, pool, 15)
-        }
+        const rows = await fetchPublicBookingAlternatesByModel(vehicle.id, vehicle.brand, vehicle.model, 20)
         if (!cancelled) setSimilar(rows || [])
       } catch {
         if (!cancelled) setSimilar([])
@@ -141,6 +137,34 @@ export function PublicVehicleBook() {
     const w = Math.min(el.clientWidth * 0.8, 260)
     el.scrollBy({ left: direction * w, behavior: 'smooth' })
   }, [])
+
+  const measureCarouselOverflow = useCallback(() => {
+    const el = carouselRef.current
+    if (!el) {
+      setCarouselOverflows(false)
+      return
+    }
+    setCarouselOverflows(el.scrollWidth > Math.ceil(el.clientWidth) + 2)
+  }, [])
+
+  useLayoutEffect(() => {
+    measureCarouselOverflow()
+  }, [similar, similarLoading, measureCarouselOverflow])
+
+  useEffect(() => {
+    const el = carouselRef.current
+    if (!el || similar.length === 0) return undefined
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measureCarouselOverflow()) : null
+    ro?.observe(el)
+    el.addEventListener('scroll', measureCarouselOverflow, { passive: true })
+    window.addEventListener('resize', measureCarouselOverflow)
+    measureCarouselOverflow()
+    return () => {
+      ro?.disconnect()
+      el.removeEventListener('scroll', measureCarouselOverflow)
+      window.removeEventListener('resize', measureCarouselOverflow)
+    }
+  }, [similar, measureCarouselOverflow])
 
   const isSold = vehicle?.sold
   const isReserved = vehicle?.reserved && !vehicle?.sold
@@ -273,9 +297,9 @@ export function PublicVehicleBook() {
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-bold text-white leading-tight">Book a viewing</h1>
               <p className="text-sm text-zinc-400 mt-1 leading-relaxed">
-                Mon–Fri <span className="text-zinc-300">10am–7pm</span>, Sun{' '}
-                <span className="text-zinc-300">12:30pm–3:30pm</span> (half-hour slots). Closed Saturdays. Times shown
-                in your device&apos;s timezone; we&apos;ll confirm with you before you arrive.
+                Mon–Sat <span className="text-zinc-300">10am–7pm</span>, Sun{' '}
+                <span className="text-zinc-300">12:30pm–3:30pm</span> (half-hour slots). Times shown in your device&apos;s
+                timezone; we&apos;ll confirm with you before you arrive.
               </p>
             </div>
           </div>
@@ -440,7 +464,7 @@ export function PublicVehicleBook() {
                 </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">Tap a car to pick another slot · same model lineup</p>
               </div>
-              {similar.length > 1 && !similarLoading ? (
+              {carouselOverflows && !similarLoading ? (
                 <div className="flex gap-1 shrink-0">
                   <button
                     type="button"
@@ -547,8 +571,8 @@ export function PublicVehicleBook() {
             <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col relative">
               <div className="p-4 space-y-4 customer-booking-calendar">
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Saturdays are closed. Sundays use shortened hours below. Slots are every 30 minutes during opening
-                  hours.
+                  Mon–Sat use full-day hours below; Sundays use shortened hours. Slots are every 30 minutes during
+                  opening hours.
                 </p>
 
                 <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 p-2">
@@ -569,7 +593,7 @@ export function PublicVehicleBook() {
                 <div>
                   <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Time</p>
                   {!selectedDate ? (
-                    <p className="text-xs text-zinc-500">Tap a weekday or Sunday above to load available times.</p>
+                    <p className="text-xs text-zinc-500">Pick a date above to load available times.</p>
                   ) : slotsForDay.length === 0 ? (
                     <p className="text-xs text-zinc-500">That day isn’t available.</p>
                   ) : (

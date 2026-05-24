@@ -6,9 +6,9 @@
 
 /** @param {Date} date */
 export function isPublicBookingDaySelectable(date) {
-	const dow = date.getDay()
-	if (dow === 6) return false // Saturday closed
-	return dow === 0 || (dow >= 1 && dow <= 5)
+	if (!date || !(date instanceof Date) || Number.isNaN(date.getTime())) return false
+	// Mon–Sat vs Sun windows are in `publicBookingTimeSlotsForDay`; calendar allows each day’s slot strip.
+	return true
 }
 
 /** @returns {{ id: string, label: string, hour: number, minute: number }[]} */
@@ -25,8 +25,8 @@ export function publicBookingTimeSlotsForDay(day) {
 
 	const out = []
 
-	if (dow >= 1 && dow <= 5) {
-		// Weekdays Mon–Fri: 10:00–18:30 in 30 min steps (last slot ends by 19:00)
+	if (dow >= 1 && dow <= 6) {
+		// Mon–Sat: 10:00–18:30 start times every 30 min (last viewing block ends by 19:00)
 		for (let mins = 10 * 60; mins <= 18 * 60 + 30; mins += 30) {
 			const hour = Math.floor(mins / 60)
 			const minute = mins % 60

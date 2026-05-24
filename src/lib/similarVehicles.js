@@ -70,3 +70,33 @@ export function getSimilarVehicles(currentVehicle, allVehicles, limit = 12) {
   scored.sort((a, b) => b.score - a.score)
   return scored.slice(0, limit).map(({ vehicle }) => vehicle)
 }
+
+/**
+ * Same make & model only (case-insensitive), excluding current id and unavailable rows.
+ * Ranks ties by similarity score (body/year/mileage, etc.).
+ */
+export function getSimilarVehiclesSameModel(currentVehicle, allVehicles, limit = 12) {
+  const b = String(currentVehicle?.brand ?? '')
+    .trim()
+    .toLowerCase()
+  const m = String(currentVehicle?.model ?? '')
+    .trim()
+    .toLowerCase()
+  if (!b || !m) return []
+
+  const pool = (allVehicles || []).filter((v) => {
+    if (!v || v.id === currentVehicle.id) return false
+    if (v.sold || v.reserved) return false
+    const bx = String(v.brand ?? '')
+      .trim()
+      .toLowerCase()
+    const mx = String(v.model ?? '')
+      .trim()
+      .toLowerCase()
+    return bx === b && mx === m
+  })
+
+  const scored = pool.map((vehicle) => ({ vehicle, score: scoreSimilarity(currentVehicle, vehicle) }))
+  scored.sort((x, y) => y.score - x.score)
+  return scored.slice(0, limit).map(({ vehicle }) => vehicle)
+}

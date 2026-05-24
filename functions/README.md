@@ -39,9 +39,9 @@ Set in Firebase / Google Cloud for this function:
 
 ### Opening hours enforced server-side
 
-- **Monday–Friday:** half-hour slots from **10:00** through **18:30** (last slot ends by 19:00).  
+- **Monday–Saturday:** half-hour slots from **10:00** through **18:30** (last slot ends by 19:00).  
 - **Sunday:** slots from **12:30** through **15:00** (closes 15:30).  
-- **Saturday:** not bookable.
+
 
 The browser calendar mirrors this; spoofed ISO values outside these windows get **400** from the function.
 
