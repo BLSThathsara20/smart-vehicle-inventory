@@ -410,12 +410,6 @@ export function PublicVehicleBook() {
           >
             {canBook ? 'Choose date & time' : 'Not available'}
           </button>
-
-          {import.meta.env.DEV && canBook && !BOOKING_SUBMIT_CONFIGURED ? (
-            <p className="mt-2 text-[10px] text-zinc-600 font-mono leading-snug">
-              Dev: set VITE_PUBLIC_BOOKING_EMAIL for email (mailto), or VITE_PUBLIC_VIEWING_BOOKING_URL for POST → Sanity.
-            </p>
-          ) : null}
         </div>
 
         <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/40">
