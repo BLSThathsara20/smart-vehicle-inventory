@@ -23,6 +23,8 @@ firebase deploy --only functions
 
 Customer **Book a viewing** (`/book/vehicle/:id`) sends **`POST`** JSON here; the handler appends a row to Sanity `vehicle.viewing_bookings` (same as staff-created viewings → **Viewings** page + vehicle viewings modal).
 
+> Prefer no backend at all? Set **`VITE_PUBLIC_BOOKING_EMAIL`** on the SPA — customers send a prefilled email instead (**root `README`**). Requests are **not** added to Sanity until staff enter them.
+
 Writes use the **Sanity token on the server** — customers never get Editor tokens.
 
 ### Environment variables

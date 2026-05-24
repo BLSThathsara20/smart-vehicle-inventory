@@ -62,6 +62,12 @@ export function Privacy() {
 								(when reserving a vehicle)
 							</li>
 							<li>
+								<strong>Public viewing enquiries:</strong> Name, phone number,
+								optional email, optional notes, your preferred viewing date and
+								time (and which vehicle), when you use the Book a viewing link on
+								our website
+							</li>
+							<li>
 								<strong>Staff users:</strong> Email, display name, role
 								assignments (for access control)
 							</li>
@@ -100,9 +106,10 @@ export function Privacy() {
 							How we use your data
 						</h2>
 						<p>
-							Your data is used to manage vehicle reservations, communicate
-							about your collection, process handovers, and operate our internal
-							systems. We do not sell your data to third parties.
+							Your data is used to manage vehicle reservations and viewing
+							appointments, communicate about enquiries and collections, process
+							handovers, and operate our internal systems. We do not sell your data
+							to third parties.
 						</p>
 					</section>
 

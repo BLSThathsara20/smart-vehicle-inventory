@@ -19,8 +19,11 @@ export function Footer() {
         </Link>
         {' · '}
         <Link to="/privacy" className="text-amber-400 hover:text-amber-300">
-          Privacy & Data Protection
+          Privacy notice (UK)
         </Link>
+      </p>
+      <p className="mt-2 text-[11px] text-slate-600 max-w-xl mx-auto">
+        UK GDPR &amp; Data Protection Act 2018 — how we handle personal information.
       </p>
     </footer>
   )

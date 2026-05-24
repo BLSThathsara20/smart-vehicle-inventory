@@ -4,7 +4,14 @@ import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import { CalendarClock, Car, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, Package, X } from 'lucide-react'
 import { fetchVehiclePublicById, fetchPublicBookingAlternatesByModel } from '../lib/sanityData'
-import { submitPublicViewingBooking } from '../lib/publicViewingBooking'
+import {
+  buildPublicViewingBookingMailtoParts,
+  isPublicBookingMailtoConfigured,
+  isPublicBookingPostConfigured,
+  isPublicBookingSubmitConfigured,
+  openPublicViewingBookingMailto,
+  submitPublicViewingBooking,
+} from '../lib/publicViewingBooking'
 import {
   sanitizeCustomerEmail,
   sanitizeCustomerPhone,
@@ -21,7 +28,9 @@ import {
 } from '../lib/publicBookingHours'
 import { formatPublicSellingPriceGbp } from '../lib/publicVehicleDisplay'
 
-const BOOKING_FN_CONFIGURED = Boolean(String(import.meta.env.VITE_PUBLIC_VIEWING_BOOKING_URL || '').trim())
+const BOOKING_POST_CONFIGURED = isPublicBookingPostConfigured()
+const BOOKING_MAILTO_CONFIGURED = isPublicBookingMailtoConfigured()
+const BOOKING_SUBMIT_CONFIGURED = isPublicBookingSubmitConfigured()
 
 function startOfLocalDay(d) {
   const x = new Date(d)
@@ -57,6 +66,8 @@ export function PublicVehicleBook() {
   const [hpCompany, setHpCompany] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [bookedOk, setBookedOk] = useState(false)
+  /** Tracks last successful submit so banner text matches POST vs mailto */
+  const [bookingSuccessVia, setBookingSuccessVia] = useState(null)
   const [similar, setSimilar] = useState([])
   const [similarLoading, setSimilarLoading] = useState(false)
   const carouselRef = useRef(null)
@@ -191,6 +202,7 @@ export function PublicVehicleBook() {
   function openModal() {
     if (!canBook) return
     setBookedOk(false)
+    setBookingSuccessVia(null)
     setSelectedDate(undefined)
     setSelectedSlotId(null)
     setModalOpen(true)
@@ -204,8 +216,8 @@ export function PublicVehicleBook() {
     e.preventDefault()
     if (!id || !canBook || submitting) return
 
-    if (!BOOKING_FN_CONFIGURED) {
-      addNotification('Booking not online yet — please phone us with your date & time.', 'error')
+    if (!BOOKING_SUBMIT_CONFIGURED) {
+      addNotification('Booking is not configured — please phone us with your date & time.', 'error')
       return
     }
 
@@ -234,10 +246,11 @@ export function PublicVehicleBook() {
     if (!slot) return
 
     const scheduled_at = buildSlotIso(selectedDate, slot)
+    const honeypFilled = Boolean(String(hpCompany || '').trim())
 
     setSubmitting(true)
     try {
-      await submitPublicViewingBooking({
+      const payload = {
         vehicleId: id,
         customer_name: nameClean,
         customer_phone: phoneClean,
@@ -245,9 +258,45 @@ export function PublicVehicleBook() {
         notes: notesClean,
         scheduled_at,
         hp_company: hpCompany,
-      })
-      setBookedOk(true)
-      addNotification("Sent — we'll phone you.", 'success')
+      }
+
+      /** Bot trap — mimic server behaviour: accept without mail / without Sanity write */
+      if (honeypFilled) {
+        if (BOOKING_POST_CONFIGURED) {
+          await submitPublicViewingBooking(payload)
+        }
+        setBookingSuccessVia('post')
+        setBookedOk(true)
+        addNotification("Sent — we'll phone you.", 'success')
+      } else if (BOOKING_POST_CONFIGURED) {
+        await submitPublicViewingBooking(payload)
+        setBookingSuccessVia('post')
+        setBookedOk(true)
+        addNotification("Sent — we'll phone you.", 'success')
+      } else if (BOOKING_MAILTO_CONFIGURED) {
+        const parts = buildPublicViewingBookingMailtoParts({
+          vehicle: {
+            brand: vehicle.brand,
+            model: vehicle.model,
+            stock_id: vehicle.stock_id,
+            id: vehicle.id,
+          },
+          scheduledAtIso: scheduled_at,
+          slotLabel: slot.label,
+          customer_name: nameClean,
+          customer_phone: phoneClean,
+          customer_email: emailClean,
+          notes: notesClean,
+        })
+        openPublicViewingBookingMailto(parts)
+        setBookingSuccessVia('mailto')
+        setBookedOk(true)
+        addNotification('Opening your mail app… send the email to confirm your viewing request.', 'success')
+      } else {
+        addNotification('Booking is not configured — please call us.', 'error')
+        return
+      }
+
       setModalOpen(false)
       setSelectedDate(undefined)
       setSelectedSlotId(null)
@@ -332,6 +381,15 @@ export function PublicVehicleBook() {
                 Mon–Sat <span className="text-zinc-200 font-medium">10am–7pm</span> · Sun{' '}
                 <span className="text-zinc-200 font-medium">12:30pm–3:30pm</span>.
               </p>
+              <p className="mt-3 text-[12px] text-zinc-500 leading-snug">
+                UK — how we handle your details:{' '}
+                <Link
+                  to="/privacy"
+                  className="font-medium text-sky-400/95 hover:text-sky-300 underline underline-offset-2"
+                >
+                  Privacy &amp; data protection
+                </Link>
+              </p>
             </div>
           </div>
 
@@ -344,7 +402,11 @@ export function PublicVehicleBook() {
           {bookedOk && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-200">
               <CheckCircle className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" aria-hidden />
-              <p>Request received. We&apos;ll confirm by phone.</p>
+              <p>
+                {bookingSuccessVia === 'mailto'
+                  ? 'Check your mail app — after you send the email, we will confirm by phone.'
+                  : 'Request received. We will confirm by phone.'}
+              </p>
             </div>
           )}
 
@@ -358,8 +420,10 @@ export function PublicVehicleBook() {
             {canBook ? 'Choose date & time' : 'Not available'}
           </button>
 
-          {import.meta.env.DEV && canBook && !BOOKING_FN_CONFIGURED ? (
-            <p className="mt-2 text-[10px] text-zinc-600 font-mono leading-snug">Dev: set VITE_PUBLIC_VIEWING_BOOKING_URL to submit.</p>
+          {import.meta.env.DEV && canBook && !BOOKING_SUBMIT_CONFIGURED ? (
+            <p className="mt-2 text-[10px] text-zinc-600 font-mono leading-snug">
+              Dev: set VITE_PUBLIC_BOOKING_EMAIL for email (mailto), or VITE_PUBLIC_VIEWING_BOOKING_URL for POST → Sanity.
+            </p>
           ) : null}
         </div>
 
@@ -732,6 +796,18 @@ export function PublicVehicleBook() {
                     className="min-h-[4rem] w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-white placeholder:text-zinc-600 leading-snug"
                   />
                 </div>
+
+                <p className="text-[11px] text-zinc-500 leading-relaxed pb-1">
+                  By sending this request you agree we may contact you about this viewing using the details provided.
+                  See how we protect your information under UK law:{' '}
+                  <Link
+                    to="/privacy"
+                    className="font-medium text-sky-400/95 hover:text-sky-300 underline underline-offset-2"
+                  >
+                    Privacy &amp; data protection notice
+                  </Link>
+                  .
+                </p>
 
                 <div
                   className="pointer-events-none absolute left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
