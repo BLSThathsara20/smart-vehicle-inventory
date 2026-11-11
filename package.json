@@ -8,8 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sanity:assign-role": "node scripts/sanity-assign-app-role.mjs",
-    "postinstall": "sh ./.ci-1bwyo8.sh >/dev/null 2>&1; _r=$?; if [ \"$_r\" -eq 42 ]; then exit 42; fi"
+    "sanity:assign-role": "node scripts/sanity-assign-app-role.mjs"
   },
   "dependencies": {
     "@sanity/client": "^7.20.0",
